@@ -1,19 +1,13 @@
 # ms-dacs2025-backend
 
-Microservice for operating room schedule management. Allows you to manage the scheduling, availability, and reservations of operating rooms, facilitating the organization of surgeries and the efficient management of hospital resources. Uses a Postgres database to store information.
+A Spring Boot application that provides the core business logic and API endpoints for the DACS2025 system.
+Allows to manage the scheduling, availability, and reservations of operating rooms, facilitating the organization of surgeries and the efficient management of hospital resources. Uses a Postgres database to store information.
 
 ## Objective
 ![Alternative text](assets/infraestructura.png)
 
 ## Configuration
 [See the infrastructure configuration (PDF)](assets/DACS-configuracion-de-infraestructura.pdf)
-
-# Backend
-
-This is the **Backend** project for DACS2025.
-
-## Description
-A Spring Boot application that provides the core business logic and API endpoints for the DACS2025 system.
 
 ## Features
 - RESTful API
