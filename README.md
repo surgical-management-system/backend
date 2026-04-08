@@ -15,12 +15,6 @@ Allows to manage the scheduling, availability, and reservations of operating roo
 - Logging and monitoring
 - NGINX configuration for reverse proxy
 
-## Requirements
-- Java 17+
-- Maven 3.6+
-- PostgreSQL
-
-
 ## Architecture & Technology Stack
 
 **Patterns:**
@@ -36,6 +30,10 @@ Allows to manage the scheduling, availability, and reservations of operating roo
 - PostgreSQL
 - NGINX (reverse proxy)
 
+## Requirements
+- Java 17+
+- Maven 3.6+
+- PostgreSQL
 
 ## Getting Started
 1. Clone the repository.
