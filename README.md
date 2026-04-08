@@ -8,17 +8,6 @@ Microservice for operating room schedule management. Allows you to manage the sc
 ## Configuration
 [See the infrastructure configuration (PDF)](assets/DACS-configuracion-de-infraestructura.pdf)
 
-# Run locally
-```
-mvn clean spring-boot:run
-```
-
-You can optionally add the parameter:
-
--P local
-
-```
-
 # Backend
 
 This is the **Backend** project for DACS2025.
