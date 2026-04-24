@@ -5,12 +5,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.dacs.backend.dto.MiembroEquipoMedicoDto;
 import com.dacs.backend.dto.CirugiaDTO;
-import com.dacs.backend.dto.PacienteDTO;
-import com.dacs.backend.model.entity.Quirofano;
 import com.dacs.backend.service.CirugiaService;
-import com.dacs.backend.service.TurnoService;
-
-import org.modelmapper.ModelMapper;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,29 +13,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.ServicioDto;
-import com.dacs.backend.mapper.CirugiaMapper;
-import com.dacs.backend.model.entity.Cirugia;
 import com.dacs.backend.model.entity.EstadoCirugia;
-import com.dacs.backend.model.entity.Paciente;
-import com.dacs.backend.model.repository.CirugiaRepository;
-import com.dacs.backend.model.repository.PacienteRepository;
 
-import java.time.LocalDateTime;
 import java.time.LocalDate;
-import java.util.Date;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
@@ -51,19 +32,19 @@ public class CirugiaController {
     @Autowired
     private CirugiaService cirugiaService;
 
-    @Autowired
-    private TurnoService turnoService;
-
     @GetMapping("")
     public ResponseEntity<PaginacionDto<CirugiaDTO.Response>> getByPage(
             @RequestParam(name = "pagina", required = false, defaultValue = "0") int pagina,
             @RequestParam(name = "tamano", required = false, defaultValue = "20") int tamano,
             @RequestParam(name = "fechaInicio", required = false) String fechaInicio,
             @RequestParam(name = "fechaFin", required = false) String fechaFin,
-            @RequestParam(name = "estado", required = false) String estado) {
+            @RequestParam(name = "estado", required = false) String estado,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "sort", required = false, defaultValue = "fechaHoraInicio") String sort,
+            @RequestParam(name = "order", required = false, defaultValue = "asc") String order) {
                 System.err.println("tamano: " + tamano);
         EstadoCirugia estadoEnum = parseEstado(estado);
-        PaginacionDto<CirugiaDTO.Response> cirugias = cirugiaService.getCirugias(pagina, tamano, parseFecha(fechaInicio), parseFecha(fechaFin), estadoEnum);
+        PaginacionDto<CirugiaDTO.Response> cirugias = cirugiaService.getCirugias(pagina, tamano, parseFecha(fechaInicio), parseFecha(fechaFin), estadoEnum, search, sort, order);
         return ResponseEntity.ok(cirugias);
     }
 

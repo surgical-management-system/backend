@@ -1,14 +1,13 @@
 package com.dacs.backend.service;
 
 import java.time.LocalDateTime;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.dacs.backend.model.entity.Turno;
-import com.dacs.backend.dto.CirugiaDTO;
 import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.TurnoDTO;
 import com.dacs.backend.model.entity.Cirugia;
@@ -19,6 +18,7 @@ import com.dacs.backend.model.repository.QuirofanoRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TurnoServiceImpl implements TurnoService {
@@ -109,23 +109,36 @@ public class TurnoServiceImpl implements TurnoService {
     @Override
     public Boolean verificarDisponibilidadTurno(Long quirofanoId, LocalDateTime fechaHoraInicio,
             LocalDateTime fechaHoraFin) {
+        if (fechaHoraInicio == null || fechaHoraFin == null || !fechaHoraFin.isAfter(fechaHoraInicio)) {
+            return false;
+        }
+        if (fechaHoraInicio.getMinute() % 30 != 0 || fechaHoraInicio.getSecond() != 0 || fechaHoraInicio.getNano() != 0
+                || fechaHoraFin.getMinute() % 30 != 0 || fechaHoraFin.getSecond() != 0 || fechaHoraFin.getNano() != 0) {
+            return false;
+        }
+
         long minutos = java.time.Duration.between(fechaHoraInicio, fechaHoraFin).toMinutes();
         long cantidad = minutos / 30;
+        if (minutos % 30 != 0) {
+            cantidad++;
+        }
         System.out.println("Cantidad de turnos necesarios: " + cantidad);
         System.out.println("FechaHoraIniciod: " + fechaHoraInicio);
         System.out.println("FechaHoraFin: " + fechaHoraFin);
 
-        // Obtener todos los turnos en el rango para el quirófano
-        List<Turno> turnos = turnoRepository.findAllByFechaHoraInicioBetweenAndQuirofanoId(
-            fechaHoraInicio, fechaHoraFin.minusMinutes(1), quirofanoId);
+        // Obtener todos los turnos en el rango [inicio, fin) para el quirófano
+        List<Turno> turnos = turnoRepository.findAllInRangeByQuirofanoId(fechaHoraInicio, fechaHoraFin, quirofanoId);
 
-        // Verificar que todos los bloques requeridos estén DISPONIBLE y sean consecutivos
+        Map<LocalDateTime, Turno> turnosPorFecha = new HashMap<>();
+        for (Turno turno : turnos) {
+            turnosPorFecha.put(turno.getFechaHoraInicio(), turno);
+        }
+
+        // Verificar que todos los bloques requeridos existan y estén DISPONIBLE
         for (int i = 0; i < cantidad; i++) {
             LocalDateTime actual = fechaHoraInicio.plusMinutes(i * 30);
-            boolean disponible = turnos.stream().anyMatch(t ->
-                t.getFechaHoraInicio().equals(actual) &&
-                "DISPONIBLE".equalsIgnoreCase(t.getEstado())
-            );
+            Turno bloque = turnosPorFecha.get(actual);
+            boolean disponible = bloque != null && "DISPONIBLE".equalsIgnoreCase(bloque.getEstado());
             if (!disponible) {
                 return false;
             }
@@ -134,18 +147,14 @@ public class TurnoServiceImpl implements TurnoService {
     }
 
     @Override
+    @Transactional
     public Turno asignarTurno(Long cirugiaId, Long quirofanoId, LocalDateTime fechaHoraInicio,
             LocalDateTime fechaHoraFin) {
-        List<Turno> turnos = turnoRepository.findAllByFechaHoraInicioBetweenAndQuirofanoIdAndEstado(fechaHoraInicio,
-                fechaHoraFin, quirofanoId, "DISPONIBLE");
-        // Filtrar solo los turnos cuyo fechaHoraInicio sea >= fechaHoraInicio y <
-        // fechaHoraFin
-        List<Turno> turnosEnRango = new ArrayList<>();
-        for (Turno t : turnos) {
-            if (!t.getFechaHoraInicio().isBefore(fechaHoraInicio) && t.getFechaHoraInicio().isBefore(fechaHoraFin)) {
-                turnosEnRango.add(t);
-            }
-        }
+        List<Turno> turnosEnRango = turnoRepository.findAllInRangeByQuirofanoId(fechaHoraInicio, fechaHoraFin, quirofanoId)
+                .stream()
+                .filter(t -> "DISPONIBLE".equalsIgnoreCase(t.getEstado()))
+                .toList();
+
         System.err.println("Turnos disponibles encontrados: " + turnosEnRango);
         if (turnosEnRango.isEmpty()) {
             throw new IllegalArgumentException(
@@ -160,6 +169,56 @@ public class TurnoServiceImpl implements TurnoService {
         }
         turnoRepository.saveAll(turnosEnRango);
         return turnosEnRango.get(0);
+    }
+
+    @Override
+    @Transactional
+    public Turno reservarTurnosParaCirugia(Long cirugiaId, Long quirofanoId, LocalDateTime fechaHoraInicio,
+            LocalDateTime fechaHoraFin) {
+        if (fechaHoraInicio == null || fechaHoraFin == null || !fechaHoraFin.isAfter(fechaHoraInicio)) {
+            throw new IllegalArgumentException("El rango de fechas es inválido.");
+        }
+        if (fechaHoraInicio.getMinute() % 30 != 0 || fechaHoraInicio.getSecond() != 0 || fechaHoraInicio.getNano() != 0
+                || fechaHoraFin.getMinute() % 30 != 0 || fechaHoraFin.getSecond() != 0 || fechaHoraFin.getNano() != 0) {
+            throw new IllegalArgumentException("Las fechas deben estar alineadas a bloques de 30 minutos.");
+        }
+
+        long minutos = java.time.Duration.between(fechaHoraInicio, fechaHoraFin).toMinutes();
+        long bloquesNecesarios = minutos / 30;
+        if (minutos % 30 != 0) {
+            bloquesNecesarios++;
+        }
+
+        List<Turno> turnosBloqueados = turnoRepository.lockAllInRangeByQuirofanoId(
+                fechaHoraInicio,
+                fechaHoraFin,
+                quirofanoId);
+
+        Map<LocalDateTime, Turno> turnosPorFecha = new HashMap<>();
+        for (Turno turno : turnosBloqueados) {
+            turnosPorFecha.put(turno.getFechaHoraInicio(), turno);
+        }
+
+        List<Turno> bloquesAAsignar = new ArrayList<>();
+        for (int i = 0; i < bloquesNecesarios; i++) {
+            LocalDateTime bloqueEsperado = fechaHoraInicio.plusMinutes(i * 30);
+            Turno bloque = turnosPorFecha.get(bloqueEsperado);
+            if (bloque == null || !"DISPONIBLE".equalsIgnoreCase(bloque.getEstado())) {
+                throw new IllegalArgumentException(
+                        "No hay turnos disponibles para el quirófano en la fecha y hora solicitadas.");
+            }
+            bloquesAAsignar.add(bloque);
+        }
+
+        Cirugia cirugia = cirugiaRepository.findById(cirugiaId)
+                .orElseThrow(() -> new IllegalArgumentException("Cirugía no encontrada con ID: " + cirugiaId));
+
+        for (Turno turno : bloquesAAsignar) {
+            turno.setCirugia(cirugia);
+            turno.setEstado("ASIGNADO");
+        }
+        turnoRepository.saveAll(bloquesAAsignar);
+        return bloquesAAsignar.get(0);
     }
 
     @Override

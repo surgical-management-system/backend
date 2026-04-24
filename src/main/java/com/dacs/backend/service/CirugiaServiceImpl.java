@@ -2,7 +2,6 @@ package com.dacs.backend.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -14,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +34,8 @@ import com.dacs.backend.model.repository.EquipoMedicoRepository;
 import com.dacs.backend.model.repository.PacienteRepository;
 import com.dacs.backend.model.repository.PersonalRepository;
 import com.dacs.backend.model.repository.ServicioRepository;
-import com.dacs.backend.model.repository.TurnoRepository;
+
+import jakarta.persistence.criteria.JoinType;
 
 @Service
 public class CirugiaServiceImpl implements CirugiaService {
@@ -53,9 +55,6 @@ public class CirugiaServiceImpl implements CirugiaService {
 
     @Autowired
     private ServicioRepository servicioRepository;
-
-    @Autowired
-    private TurnoRepository turnoRepository;
 
     @Autowired
     private ModelMapper modelMapper;
@@ -81,15 +80,11 @@ public class CirugiaServiceImpl implements CirugiaService {
         System.out.println("FechaHoraFin: " + fechaHoraFin);
         System.out.println("QuirofanoId: " + quirofanoId);
         System.out.println("fechaHoraInicioss: " + fechaHoraInicio);
-        Boolean disponibilidad = turnoService.verificarDisponibilidadTurno(quirofanoId, fechaHoraInicio, fechaHoraFin);
-        if (!disponibilidad) {  
-            throw new IllegalArgumentException("No hay turnos disponibles para el quirófano en la fecha y hora solicitadas.");
-        }
-        
+
         Cirugia entity = cirugiaMapper.toEntity(request);
         Cirugia saved = cirugiaRepository.save(entity);
-        
-        turnoService.asignarTurno(saved.getId(), quirofanoId, fechaHoraInicio, fechaHoraFin);
+
+        turnoService.reservarTurnosParaCirugia(saved.getId(), quirofanoId, fechaHoraInicio, fechaHoraFin);
         
         // mapear entidad -> response DTO
         return cirugiaMapper.toResponseDto(saved);
@@ -244,53 +239,11 @@ public class CirugiaServiceImpl implements CirugiaService {
 
     @Override
     public PaginacionDto.Response<CirugiaDTO.Response> getCirugias(int pagina, int tamaño, LocalDate fechaInicio,
-            LocalDate fechaFin, EstadoCirugia estado) {
+            LocalDate fechaFin, EstadoCirugia estado, String search, String sort, String order) {
         System.err.println("asdasdasdsa: " + pagina + ", size: " + tamaño);
-        Pageable pageable = PageRequest.of(pagina, tamaño);
-        Page<Cirugia> p;
-
-        boolean tieneEstado = estado != null;
-
-        if (tieneEstado) {
-            // Filtrar por estado
-            if (fechaInicio != null && fechaFin != null) {
-                p = cirugiaRepository.findByEstadoAndFechaHoraInicioBetween(
-                        estado,
-                        fechaInicio.atStartOfDay(),
-                        fechaFin.atTime(23, 59, 59),
-                        pageable);
-            } else if (fechaInicio != null) {
-                p = cirugiaRepository.findByEstadoAndFechaHoraInicioAfter(
-                        estado,
-                        fechaInicio.atStartOfDay(),
-                        pageable);
-            } else if (fechaFin != null) {
-                p = cirugiaRepository.findByEstadoAndFechaHoraInicioBefore(
-                        estado,
-                        fechaFin.atTime(23, 59, 59),
-                        pageable);
-            } else {
-                p = cirugiaRepository.findByEstado(estado, pageable);
-            }
-        } else {
-            // Sin filtro de estado
-            if (fechaInicio != null && fechaFin != null) {
-                p = cirugiaRepository.findByFechaHoraInicioBetween(
-                        fechaInicio.atStartOfDay(),
-                        fechaFin.atTime(23, 59, 59),
-                        pageable);
-            } else if (fechaInicio != null) {
-                p = cirugiaRepository.findByFechaHoraInicioAfter(
-                        fechaInicio.atStartOfDay(),
-                        pageable);
-            } else if (fechaFin != null) {
-                p = cirugiaRepository.findByFechaHoraInicioBefore(
-                        fechaFin.atTime(23, 59, 59),
-                        pageable);
-            } else {
-                p = cirugiaRepository.findAll(pageable);
-            }
-        }
+        Sort sortSpec = buildSort(sort, order);
+        Pageable pageable = PageRequest.of(pagina, tamaño, sortSpec);
+        Page<Cirugia> p = cirugiaRepository.findAll(buildSpecification(fechaInicio, fechaFin, estado, search), pageable);
 
         List<Cirugia> entidades = p.getContent();
         List<CirugiaDTO.Response> dtos = entidades.stream()
@@ -306,6 +259,62 @@ public class CirugiaServiceImpl implements CirugiaService {
         resp.setTotalElementos(p.getTotalElements());
         resp.setTotalPaginas(p.getTotalPages());
         return resp;
+    }
+
+    private Specification<Cirugia> buildSpecification(LocalDate fechaInicio, LocalDate fechaFin, EstadoCirugia estado,
+            String search) {
+        return (root, query, cb) -> {
+            query.distinct(true);
+
+            List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
+
+            if (fechaInicio != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaHoraInicio"), fechaInicio.atStartOfDay()));
+            }
+            if (fechaFin != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fechaHoraInicio"), fechaFin.atTime(23, 59, 59)));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+
+            if (search != null && !search.isBlank()) {
+                String likePattern = "%" + search.trim().toLowerCase() + "%";
+
+                var pacienteJoin = root.join("paciente", JoinType.LEFT);
+                var servicioJoin = root.join("servicio", JoinType.LEFT);
+                var quirofanoJoin = root.join("quirofano", JoinType.LEFT);
+
+                jakarta.persistence.criteria.Predicate searchPredicate = cb.or(
+                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("nombre"), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("apellido"), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("dni"), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(servicioJoin.get("nombre"), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(root.get("estado").as(String.class), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(root.get("tipo"), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(root.get("prioridad"), "")), likePattern),
+                        cb.like(cb.lower(cb.coalesce(quirofanoJoin.get("nombre"), "")), likePattern));
+                predicates.add(searchPredicate);
+            }
+
+            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
+        };
+    }
+
+    private Sort buildSort(String sort, String order) {
+        Sort.Direction direction = "desc".equalsIgnoreCase(order) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        String normalizedSort = sort == null ? "fechaHoraInicio" : sort.trim();
+
+        return switch (normalizedSort) {
+            case "paciente" -> Sort.by(direction, "paciente.apellido").and(Sort.by(direction, "paciente.nombre"));
+            case "servicio" -> Sort.by(direction, "servicio.nombre");
+            case "estado" -> Sort.by(direction, "estado");
+            case "tipo" -> Sort.by(direction, "tipo");
+            case "prioridad" -> Sort.by(direction, "prioridad");
+            case "quirofano" -> Sort.by(direction, "quirofano.nombre");
+            case "fechaHoraInicio", "fecha", "hora" -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));
+            default -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));
+        };
     }
 
     private void mapearPacientes(List<Cirugia> entidades, List<CirugiaDTO.Response> dtos) {
