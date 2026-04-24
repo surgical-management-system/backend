@@ -65,10 +65,10 @@ public class DacsControllerAdvice {
 	@ExceptionHandler(value = { NoHandlerFoundException.class })
 	public ResponseEntity<ExceptionResponse> handleNotFoundException(Exception ex, WebRequest request) {
 		ExceptionResponse exceptionResponse = new ExceptionResponse(
-				HttpStatus.INTERNAL_SERVER_ERROR.value(),
-				this.codePrefix + "_" + HttpStatus.INTERNAL_SERVER_ERROR.value(), ex.getMessage());
+				HttpStatus.NOT_FOUND.value(),
+				this.codePrefix + "_" + HttpStatus.NOT_FOUND.value(), ex.getMessage());
 
-		return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(exceptionResponse);
+		return ResponseEntity.status(HttpStatus.NOT_FOUND).body(exceptionResponse);
 	}
 	
 	@ExceptionHandler(value = { ResourceNotFoundException.class })
@@ -95,7 +95,7 @@ public class DacsControllerAdvice {
 			if (exceptionMessage == null) {
 				return "Error inesperado (clave de mensaje nula)";
 			}
-			return this.messageSource.getMessage(exceptionMessage, params, new Locale("es", "AR"));
+			return this.messageSource.getMessage(exceptionMessage, params, Locale.forLanguageTag("es-AR"));
 		} catch (Exception e) {
 			return "Error inesperado (clave de mensaje: '" + exceptionMessage + "')";
 		}
