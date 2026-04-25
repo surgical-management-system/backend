@@ -8,8 +8,6 @@ import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.PersonalDto;
 import com.dacs.backend.service.PersonalService;
 
-import io.micrometer.core.ipc.http.HttpSender.Response;
-
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +39,11 @@ public class PersonalController {
     public ResponseEntity<PersonalDto.Response> create(@RequestBody PersonalDto.Create data) {
         PersonalDto.Response out = personalService.create(data);
         return ResponseEntity.status(HttpStatus.CREATED).body(out);
+    }
+
+    @GetMapping("/existe-legajo")
+    public ResponseEntity<Boolean> existsByLegajo(@RequestParam(name = "legajo") String legajo) {
+        return ResponseEntity.ok(personalService.existsByLegajo(legajo));
     }
 
     @PutMapping("/{id}")

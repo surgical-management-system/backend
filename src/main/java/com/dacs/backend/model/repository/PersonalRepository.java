@@ -14,6 +14,18 @@ public interface PersonalRepository extends JpaRepository<Personal, Long> {
     List<Personal> findByNombreContainingIgnoreCaseOrDniContainingIgnoreCase(String param, String param2);
     
     Page<Personal> findByNombreContainingIgnoreCase(String nombre, Pageable pageable);
+
+    boolean existsByLegajoIgnoreCase(String legajo);
+
+    boolean existsByDniIgnoreCase(String dni);
+
+    boolean existsByTelefonoIgnoreCase(String telefono);
+
+    boolean existsByLegajoIgnoreCaseAndIdNot(String legajo, Long id);
+
+    boolean existsByDniIgnoreCaseAndIdNot(String dni, Long id);
+
+    boolean existsByTelefonoIgnoreCaseAndIdNot(String telefono, Long id);
 }
 
 
