@@ -15,6 +15,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +39,7 @@ import com.dacs.backend.model.repository.PersonalRepository;
 import com.dacs.backend.model.repository.ServicioRepository;
 
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Subquery;
 
 @Service
 public class CirugiaServiceImpl implements CirugiaService {
@@ -240,10 +244,15 @@ public class CirugiaServiceImpl implements CirugiaService {
     @Override
     public PaginacionDto.Response<CirugiaDTO.Response> getCirugias(int pagina, int tamaño, LocalDate fechaInicio,
             LocalDate fechaFin, EstadoCirugia estado, String search, String sort, String order) {
-        System.err.println("asdasdasdsa: " + pagina + ", size: " + tamaño);
         Sort sortSpec = buildSort(sort, order);
         Pageable pageable = PageRequest.of(pagina, tamaño, sortSpec);
-        Page<Cirugia> p = cirugiaRepository.findAll(buildSpecification(fechaInicio, fechaFin, estado, search), pageable);
+
+        Specification<Cirugia> specification = buildSpecification(fechaInicio, fechaFin, estado, search);
+        if (shouldFilterToAssignedSurgeries()) {
+            specification = specification.and(assignedToCurrentMedicalStaff());
+        }
+
+        Page<Cirugia> p = cirugiaRepository.findAll(specification, pageable);
 
         List<Cirugia> entidades = p.getContent();
         List<CirugiaDTO.Response> dtos = entidades.stream()
@@ -299,6 +308,64 @@ public class CirugiaServiceImpl implements CirugiaService {
 
             return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
         };
+    }
+
+    private Specification<Cirugia> assignedToCurrentMedicalStaff() {
+        String username = currentUsername();
+        if (username == null || username.isBlank()) {
+            return (root, query, cb) -> cb.conjunction();
+        }
+
+        String normalizedUsername = username.toLowerCase();
+        return (root, query, cb) -> {
+            Subquery<Long> subquery = query.subquery(Long.class);
+            var equipoRoot = subquery.from(EquipoMedico.class);
+            var personalJoin = equipoRoot.join("personal");
+
+            subquery.select(cb.literal(1L));
+            subquery.where(
+                    cb.equal(equipoRoot.get("cirugia"), root),
+                    cb.equal(cb.lower(personalJoin.get("legajo")), normalizedUsername));
+
+            return cb.exists(subquery);
+        };
+    }
+
+    private boolean shouldFilterToAssignedSurgeries() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        boolean isAdmin = authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_admin"::equals);
+        if (isAdmin) {
+            return false;
+        }
+
+        return authentication.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .anyMatch("ROLE_personal_medico"::equals);
+    }
+
+    private String currentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return null;
+        }
+
+        String username = authentication.getName();
+        if (username != null && !username.isBlank()) {
+            return username;
+        }
+
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+            return jwt.getClaimAsString("preferred_username");
+        }
+
+        return null;
     }
 
     private Sort buildSort(String sort, String order) {
