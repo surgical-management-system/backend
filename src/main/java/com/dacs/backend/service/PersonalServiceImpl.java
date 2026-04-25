@@ -19,6 +19,9 @@ import jakarta.transaction.Transactional;
 @Service
 public class PersonalServiceImpl implements PersonalService {
 
+    private static final java.util.regex.Pattern DNI_PATTERN = java.util.regex.Pattern.compile("^\\d{7,10}$");
+    private static final java.util.regex.Pattern TELEFONO_PATTERN = java.util.regex.Pattern.compile("^[+]?\\d{8,15}$");
+
     @Autowired
     private PersonalRepository personalRepository;
 
@@ -28,6 +31,8 @@ public class PersonalServiceImpl implements PersonalService {
     @Override
     @Transactional
     public PersonalDto.Response create(PersonalDto.Create request) {
+        sanitizeCreateRequest(request);
+        validateRequiredAndFormatOnCreate(request);
         validateDuplicatesOnCreate(request);
         Personal entity = modelMapper.map(request, Personal.class);
         Personal saved = personalRepository.save(entity);
@@ -40,6 +45,8 @@ public class PersonalServiceImpl implements PersonalService {
         Personal existingPersonal = personalRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Personal not found with id: " + id));
 
+        sanitizeUpdateRequest(request);
+        validateRequiredAndFormatOnUpdate(request);
         validateDuplicatesOnUpdate(id, request);
 
         modelMapper.map(request, existingPersonal);
@@ -134,5 +141,87 @@ public class PersonalServiceImpl implements PersonalService {
        }
        String trimmed = value.trim();
        return trimmed.isEmpty() ? null : trimmed;
+   }
+
+   private void sanitizeCreateRequest(PersonalDto.Create request) {
+       if (request == null) {
+           return;
+       }
+       request.setLegajo(normalize(request.getLegajo()));
+       request.setNombre(normalize(request.getNombre()));
+       request.setApellido(normalize(request.getApellido()));
+       request.setEspecialidad(normalize(request.getEspecialidad()));
+       request.setDni(normalize(request.getDni()));
+       request.setRol(normalize(request.getRol()));
+       request.setEstado(normalize(request.getEstado()));
+       request.setTelefono(normalize(request.getTelefono()));
+   }
+
+   private void sanitizeUpdateRequest(PersonalDto.Update request) {
+       if (request == null) {
+           return;
+       }
+       request.setLegajo(normalize(request.getLegajo()));
+       request.setNombre(normalize(request.getNombre()));
+       request.setApellido(normalize(request.getApellido()));
+       request.setEspecialidad(normalize(request.getEspecialidad()));
+       request.setDni(normalize(request.getDni()));
+       request.setRol(normalize(request.getRol()));
+       request.setEstado(normalize(request.getEstado()));
+       request.setTelefono(normalize(request.getTelefono()));
+   }
+
+   private void validateRequiredAndFormatOnCreate(PersonalDto.Create request) {
+       if (request == null) {
+           throw new IllegalArgumentException("El request de personal no puede ser null");
+       }
+
+       requireField(request.getLegajo(), "legajo");
+       requireField(request.getNombre(), "nombre");
+       requireField(request.getApellido(), "apellido");
+       requireField(request.getEspecialidad(), "especialidad");
+       requireField(request.getDni(), "dni");
+       requireField(request.getRol(), "rol");
+       requireField(request.getEstado(), "estado");
+       requireField(request.getTelefono(), "telefono");
+
+       validateDni(request.getDni());
+       validateTelefono(request.getTelefono());
+   }
+
+   private void validateRequiredAndFormatOnUpdate(PersonalDto.Update request) {
+       if (request == null) {
+           throw new IllegalArgumentException("El request de personal no puede ser null");
+       }
+
+       requireField(request.getLegajo(), "legajo");
+       requireField(request.getNombre(), "nombre");
+       requireField(request.getApellido(), "apellido");
+       requireField(request.getEspecialidad(), "especialidad");
+       requireField(request.getDni(), "dni");
+       requireField(request.getRol(), "rol");
+       requireField(request.getEstado(), "estado");
+       requireField(request.getTelefono(), "telefono");
+
+       validateDni(request.getDni());
+       validateTelefono(request.getTelefono());
+   }
+
+   private void requireField(String value, String fieldName) {
+       if (value == null || value.isBlank()) {
+           throw new IllegalArgumentException("El campo " + fieldName + " es obligatorio");
+       }
+   }
+
+   private void validateDni(String dni) {
+       if (!DNI_PATTERN.matcher(dni).matches()) {
+           throw new IllegalArgumentException("El dni debe tener solo dígitos (7 a 10 caracteres)");
+       }
+   }
+
+   private void validateTelefono(String telefono) {
+       if (!TELEFONO_PATTERN.matcher(telefono).matches()) {
+           throw new IllegalArgumentException("El telefono debe tener solo dígitos, opcional '+' inicial (8 a 15 caracteres)");
+       }
    }
 }
