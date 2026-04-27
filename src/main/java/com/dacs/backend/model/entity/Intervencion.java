@@ -21,8 +21,12 @@ public class Intervencion {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "cirugia_id", nullable = false)
+    @JoinColumn(name = "cirugia_id", nullable = true)
     private Cirugia cirugia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_urgencia", nullable = true)
+    private Urgencia urgencia;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tipo_intervencion_id", nullable = false)

@@ -7,6 +7,7 @@ import com.dacs.backend.model.repository.CirugiaRepository;
 import com.dacs.backend.model.repository.TipoIntervencionRepository;
 
 import org.modelmapper.ModelMapper;
+import com.dacs.backend.model.repository.UrgenciaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -23,6 +24,9 @@ public class IntervencionServiceImpl implements IntervencionService {
     private CirugiaRepository cirugiaRepository;
 
     @Autowired
+    private UrgenciaRepository urgenciaRepository;
+
+    @Autowired
     private TipoIntervencionRepository tipoIntervencionRepository;
 
     @Autowired
@@ -30,7 +34,14 @@ public class IntervencionServiceImpl implements IntervencionService {
 
     @Override
     public List<IntervencionDto> getByCirugiaId(Long cirugiaId) {
-        return intervencionRepository.findAll().stream()
+        return intervencionRepository.findByCirugiaId(cirugiaId).stream()
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<IntervencionDto> getByUrgenciaId(Long urgenciaId) {
+        return intervencionRepository.findByUrgenciaId(urgenciaId).stream()
             .map(this::toDto)
             .collect(Collectors.toList());
     }
@@ -42,6 +53,16 @@ public class IntervencionServiceImpl implements IntervencionService {
         // Set cirugia reference
         entity.setCirugia(cirugiaRepository.findById(cirugiaId).orElseThrow(() -> new RuntimeException("Cirugia not found")));
         // Set tipoIntervencion reference
+        entity.setTipoIntervencion(tipoIntervencionRepository.findById(intervencion.getTipoIntervencionId()).orElseThrow(() -> new RuntimeException("TipoIntervencion not found")));
+        Intervencion saved = intervencionRepository.save(entity);
+        return modelMapper.map(saved, IntervencionDto.class);
+    }
+
+    @Override
+    public IntervencionDto createIntervencionForUrgencia(Long urgenciaId, IntervencionDto intervencion) {
+        Intervencion entity = new Intervencion();
+        entity.setObservaciones(intervencion.getObservaciones());
+        entity.setUrgencia(urgenciaRepository.findById(urgenciaId).orElseThrow(() -> new RuntimeException("Urgencia not found")));
         entity.setTipoIntervencion(tipoIntervencionRepository.findById(intervencion.getTipoIntervencionId()).orElseThrow(() -> new RuntimeException("TipoIntervencion not found")));
         Intervencion saved = intervencionRepository.save(entity);
         return modelMapper.map(saved, IntervencionDto.class);

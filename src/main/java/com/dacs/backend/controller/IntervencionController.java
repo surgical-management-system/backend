@@ -7,7 +7,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 
 @RestController
@@ -44,5 +43,18 @@ public class IntervencionController {
                                                   @PathVariable("intervencionId") Long intervencionId) {
         intervencionService.deleteIntervencion(cirugiaId, intervencionId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/urgencia/{urgenciaId}/intervenciones")
+    public ResponseEntity<List<IntervencionDto>> getIntervencionesByUrgenciaId(@PathVariable("urgenciaId") Long urgenciaId) {
+        List<IntervencionDto> intervenciones = intervencionService.getByUrgenciaId(urgenciaId);
+        return ResponseEntity.ok(intervenciones);
+    }
+
+    @PostMapping("/urgencia/{urgenciaId}/intervenciones")
+    public ResponseEntity<IntervencionDto> createIntervencionForUrgencia(@PathVariable("urgenciaId") Long urgenciaId,
+                                                             @RequestBody IntervencionDto intervencion) {
+        IntervencionDto created = intervencionService.createIntervencionForUrgencia(urgenciaId, intervencion);
+        return ResponseEntity.ok(created);
     }
 }
