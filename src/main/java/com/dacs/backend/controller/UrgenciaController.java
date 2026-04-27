@@ -1,6 +1,7 @@
 package com.dacs.backend.controller;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -15,9 +16,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.dacs.backend.dto.MiembroEquipoMedicoDto;
 import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.UrgenciaDTO;
 import com.dacs.backend.model.entity.EstadoUrgencia;
+import com.dacs.backend.service.EquipoMedicoService;
 import com.dacs.backend.service.UrgenciaService;
 
 @RestController
@@ -26,6 +29,9 @@ public class UrgenciaController {
 
     @Autowired
     private UrgenciaService urgenciaService;
+
+    @Autowired
+    private EquipoMedicoService equipoMedicoService;
 
     @GetMapping("")
     public ResponseEntity<PaginacionDto<UrgenciaDTO.Response>> getByPage(
@@ -66,10 +72,30 @@ public class UrgenciaController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{id}/inicializar")
+    public ResponseEntity<UrgenciaDTO.Response> inicializarUrgencia(@PathVariable Long id) {
+        UrgenciaDTO.Response response = urgenciaService.inicializarUrgencia(id);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         urgenciaService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/equipo-medico")
+    public ResponseEntity<List<MiembroEquipoMedicoDto.Response>> getEquipoMedico(@PathVariable Long id) {
+        List<MiembroEquipoMedicoDto.Response> equipo = equipoMedicoService.getEquipoMedicoUrgencia(id);
+        return ResponseEntity.ok(equipo);
+    }
+
+    @PostMapping("/{id}/equipo-medico")
+    public ResponseEntity<List<MiembroEquipoMedicoDto.Response>> postEquipoMedico(@PathVariable Long id,
+            @RequestBody List<MiembroEquipoMedicoDto.Create> entityEquipoMedico) {
+        List<MiembroEquipoMedicoDto.Response> resp = equipoMedicoService.saveEquipoMedicoUrgencia(id,
+                entityEquipoMedico);
+        return ResponseEntity.status(HttpStatus.CREATED).body(resp);
     }
 
     public static LocalDate parseFecha(String fecha) {

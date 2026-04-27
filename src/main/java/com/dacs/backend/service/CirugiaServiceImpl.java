@@ -22,20 +22,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.dacs.backend.dto.CirugiaDTO;
-import com.dacs.backend.dto.MiembroEquipoMedicoDto;
 import com.dacs.backend.dto.PacienteDTO;
 import com.dacs.backend.dto.PaginacionDto;
-import com.dacs.backend.dto.PersonalDto;
 import com.dacs.backend.dto.ServicioDto;
 import com.dacs.backend.mapper.CirugiaMapper;
 import com.dacs.backend.model.entity.Cirugia;
 import com.dacs.backend.model.entity.EquipoMedico;
 import com.dacs.backend.model.entity.EstadoCirugia;
-import com.dacs.backend.model.entity.Personal;
 import com.dacs.backend.model.repository.CirugiaRepository;
-import com.dacs.backend.model.repository.EquipoMedicoRepository;
 import com.dacs.backend.model.repository.PacienteRepository;
-import com.dacs.backend.model.repository.PersonalRepository;
 import com.dacs.backend.model.repository.ServicioRepository;
 
 import jakarta.persistence.criteria.JoinType;
@@ -48,11 +43,6 @@ public class CirugiaServiceImpl implements CirugiaService {
     CirugiaRepository cirugiaRepository;
     @Autowired
     private CirugiaMapper cirugiaMapper;
-
-    @Autowired
-    private EquipoMedicoRepository equipoMedicoRepository;
-    @Autowired
-    private PersonalRepository personalRepository;
 
     @Autowired
     private PacienteRepository pacienteRepository;
@@ -147,99 +137,23 @@ public class CirugiaServiceImpl implements CirugiaService {
     }
 
     @Override
-    public List<MiembroEquipoMedicoDto.Response> getEquipoMedico(Long cirugiaId) {
-        List<EquipoMedico> equipo = equipoMedicoRepository.findByCirugiaId(cirugiaId);
-
-        List<Long> personalIds = equipo.stream()
-                .map(EquipoMedico::getPersonal)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .map(Personal::getId)
-                .collect(Collectors.toList());
-
-        final Map<Long, Personal> personalMap;
-        if (!personalIds.isEmpty()) {
-            List<Personal> personals = personalRepository.findAllById(personalIds);
-            personalMap = personals.stream().collect(Collectors.toMap(Personal::getId, p -> p));
-        } else {
-            personalMap = Map.of();
-        }
-
-        return equipo.stream().map(e -> {
-            // mapear de forma explícita igual que en createEquipoMedico
-            MiembroEquipoMedicoDto.Response dto = modelMapper.map(e, MiembroEquipoMedicoDto.Response.class);
-
-            // asegurar campos clave
-            dto.setRol(e.getRol());
-            dto.setCirugiaId(e.getCirugia() != null ? e.getCirugia().getId() : null);
-            dto.setFechaAsignacion(e.getFechaAsignacion());
-
-            // rellenar info del personal a partir del personalMap (evita N+1)
-            Personal p = (e.getPersonal() != null) ? personalMap.get(e.getPersonal().getId()) : null;
-            if (p != null) {
-                PersonalDto.Response pDto = modelMapper.map(p, PersonalDto.Response.class);
-                dto.setPersonal(pDto);
-            } else {
-                dto.setPersonal(null);
-            }
-            return dto;
-        }).collect(Collectors.toList());
-    }
-
-    @Override
     @Transactional
-    public List<MiembroEquipoMedicoDto.Response> saveEquipoMedico(Long cirugiaId,
-            List<MiembroEquipoMedicoDto.Create> req) {
-        // si la intención es reemplazar el equipo, eliminar los existentes primero
-        equipoMedicoRepository.deleteByCirugiaId(cirugiaId);
-
-        // validar existencia de la cirugía
+    public CirugiaDTO.Response inicializarCirugia(long cirugiaId) {
         Cirugia cirugia = cirugiaRepository.findById(cirugiaId)
                 .orElseThrow(() -> new IllegalArgumentException("Cirugia no encontrada id=" + cirugiaId));
 
-        // obtener ids de personal desde la petición
-        List<Long> personalIds = req.stream()
-                .map(MiembroEquipoMedicoDto.Create::getPersonalId)
-                .filter(java.util.Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-
-        // cargar todos los personals en una sola consulta
-        final Map<Long, Personal> personalMap;
-        if (!personalIds.isEmpty()) {
-            List<Personal> personals = personalRepository.findAllById(personalIds);
-            personalMap = personals.stream().collect(Collectors.toMap(Personal::getId, p -> p));
-        } else {
-            personalMap = Map.of();
+        if (cirugia.getEstado() == EstadoCirugia.FINALIZADA) {
+            throw new IllegalArgumentException("No se puede inicializar una cirugía finalizada");
+        }
+        if (cirugia.getEstado() == EstadoCirugia.CANCELADA) {
+            throw new IllegalArgumentException("No se puede inicializar una cirugía cancelada");
         }
 
-        List<EquipoMedico> toSave = construirEquipoMedico(req, cirugia, personalMap);
-        if (toSave.isEmpty()) {
-            return java.util.Collections.emptyList();
-        }
-
-        // guardar en batch y mapear resultado a DTOs
-        List<EquipoMedico> saved = equipoMedicoRepository.saveAll(toSave);
-        return mapearEquipoMedicoAResponse(saved);
+        cirugia.setEstado(EstadoCirugia.EN_CURSO);
+        Cirugia updated = cirugiaRepository.save(cirugia);
+        return cirugiaMapper.toResponseDto(updated);
     }
 
-    private List<EquipoMedico> construirEquipoMedico(List<MiembroEquipoMedicoDto.Create> req, Cirugia cirugia,
-            Map<Long, Personal> personalMap) {
-        List<EquipoMedico> toSave = new java.util.ArrayList<>();
-        for (MiembroEquipoMedicoDto.Create item : req) {
-            Personal personal = personalMap.get(item.getPersonalId());
-            if (personal == null) {
-                throw new IllegalArgumentException("Personal no encontrado id=" + item.getPersonalId());
-            }
-            EquipoMedico e = new EquipoMedico();
-            e.setFechaAsignacion(LocalDateTime.now());
-            e.setCirugia(cirugia);
-            e.setPersonal(personal);
-            e.setRol(item.getRol());
-            toSave.add(e);
-        }
-        return toSave;
-    }
 
     @Override
     public PaginacionDto.Response<CirugiaDTO.Response> getCirugias(int pagina, int tamaño, LocalDate fechaInicio,
@@ -447,25 +361,6 @@ public class CirugiaServiceImpl implements CirugiaService {
             .stream()
             .map(s -> modelMapper.map(s, ServicioDto.class))
             .collect(Collectors.toList());
-    }
-
-    private List<MiembroEquipoMedicoDto.Response> mapearEquipoMedicoAResponse(List<EquipoMedico> saved) {
-        return saved.stream().map(e -> {
-            MiembroEquipoMedicoDto.Response dto = modelMapper.map(e, MiembroEquipoMedicoDto.Response.class);
-            // asegurar campos explícitos
-            dto.setRol(e.getRol());
-            if (e.getCirugia() != null)
-                dto.setCirugiaId(e.getCirugia().getId());
-            dto.setFechaAsignacion(e.getFechaAsignacion());
-
-            // agregar info del personal (objeto)
-            Personal p = e.getPersonal();
-            if (p != null) {
-                PersonalDto.Response pDto = modelMapper.map(p, PersonalDto.Response.class);
-                dto.setPersonal(pDto);
-            }
-            return dto;
-        }).collect(Collectors.toList());
     }
 
     @Override

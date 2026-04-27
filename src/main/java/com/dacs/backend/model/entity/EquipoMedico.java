@@ -1,7 +1,6 @@
 package com.dacs.backend.model.entity;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -20,12 +19,14 @@ public class EquipoMedico {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // Relación hacia la cirugía
     @ManyToOne
-    @JoinColumn(name = "id_cirugia", nullable = false)
+    @JoinColumn(name = "id_cirugia", nullable = true)
     private Cirugia cirugia;
 
-    // Relación hacia el personal
+    @ManyToOne
+    @JoinColumn(name = "id_urgencia", nullable = true)
+    private Urgencia urgencia;
+
     @ManyToOne
     @JoinColumn(name = "id_personal", nullable = false)
     private Personal personal;  

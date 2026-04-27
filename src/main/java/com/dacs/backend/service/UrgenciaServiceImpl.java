@@ -82,6 +82,24 @@ public class UrgenciaServiceImpl implements UrgenciaService {
     }
 
     @Override
+    @Transactional
+    public UrgenciaDTO.Response inicializarUrgencia(long urgenciaId) {
+        Urgencia urgencia = urgenciaRepository.findById(urgenciaId)
+                .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada id=" + urgenciaId));
+
+        if (urgencia.getEstado() == EstadoUrgencia.FINALIZADA) {
+            throw new IllegalArgumentException("No se puede inicializar una urgencia finalizada");
+        }
+        if (urgencia.getEstado() == EstadoUrgencia.CANCELADA) {
+            throw new IllegalArgumentException("No se puede inicializar una urgencia cancelada");
+        }
+
+        urgencia.setEstado(EstadoUrgencia.EN_CURSO);
+        Urgencia updated = urgenciaRepository.save(urgencia);
+        return urgenciaMapper.toResponseDto(updated);
+    }
+
+    @Override
     public List<Urgencia> getAll() {
         return urgenciaRepository.findAll();
     }

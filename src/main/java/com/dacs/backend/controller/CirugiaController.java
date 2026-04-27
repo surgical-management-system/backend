@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.ServicioDto;
 import com.dacs.backend.model.entity.EstadoCirugia;
+import com.dacs.backend.service.EquipoMedicoService;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -31,6 +32,9 @@ public class CirugiaController {
 
     @Autowired
     private CirugiaService cirugiaService;
+
+    @Autowired
+    private EquipoMedicoService equipoMedicoService;
 
     @GetMapping("")
     public ResponseEntity<PaginacionDto<CirugiaDTO.Response>> getByPage(
@@ -72,6 +76,12 @@ public class CirugiaController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{id}/inicializar")
+    public ResponseEntity<CirugiaDTO.Response> inicializarCirugia(@PathVariable Long id) {
+        CirugiaDTO.Response entity = cirugiaService.inicializarCirugia(id);
+        return ResponseEntity.ok(entity);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Object> delete(@PathVariable Long id) {
         cirugiaService.delete(id);
@@ -81,7 +91,7 @@ public class CirugiaController {
     @GetMapping("/{id}/equipo-medico")
     public ResponseEntity<List<MiembroEquipoMedicoDto.Response>> getEquipoMedico(@PathVariable Long id) {
 
-        List<MiembroEquipoMedicoDto.Response> equipo = cirugiaService.getEquipoMedico(id);
+        List<MiembroEquipoMedicoDto.Response> equipo = equipoMedicoService.getEquipoMedicoCirugia(id);
         return ResponseEntity.ok(equipo);
     }
 
@@ -89,7 +99,7 @@ public class CirugiaController {
     public ResponseEntity<List<MiembroEquipoMedicoDto.Response>> postEquipoMedico(@PathVariable Long id,
             @RequestBody List<MiembroEquipoMedicoDto.Create> entityEquipoMedico) {
 
-        List<MiembroEquipoMedicoDto.Response> resp = cirugiaService.saveEquipoMedico(id, entityEquipoMedico);
+        List<MiembroEquipoMedicoDto.Response> resp = equipoMedicoService.saveEquipoMedicoCirugia(id, entityEquipoMedico);
         return ResponseEntity.status((HttpStatus.CREATED)).body(resp);
     }
 

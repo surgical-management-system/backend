@@ -13,12 +13,14 @@ public class MiembroEquipoMedicoDto {
     private PersonalDto.Response personal;
     private String rol;
     private Long cirugiaId;
+    private Long urgenciaId;
     private LocalDateTime fechaAsignacion;
     }
 
     @Data
     public static class Create {
         private Long cirugiaId;
+        private Long urgenciaId;
         private Long personalId;
         private String rol;
     }
