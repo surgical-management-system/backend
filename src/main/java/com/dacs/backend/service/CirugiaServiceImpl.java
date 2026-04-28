@@ -99,10 +99,7 @@ public class CirugiaServiceImpl implements CirugiaService {
     public void delete(Long id) {
         Cirugia cirugia = cirugiaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cirugía no encontrada id=" + id));
-        // Soft delete: cambiar estado a CANCELADA
-        cirugia.setEstado(EstadoCirugia.CANCELADA);
-        cirugiaRepository.save(cirugia);
-        turnoService.borrarTurno(id);
+        cancelarCirugiaYLiberarTurnos(cirugia);
     }
 
     @Override
@@ -119,7 +116,11 @@ public class CirugiaServiceImpl implements CirugiaService {
         if (entity == null) {
             throw new IllegalArgumentException("La entidad Cirugia no puede ser null");
         }
-        return cirugiaMapper.toResponseDto(cirugiaRepository.save(entity));
+        Cirugia saved = cirugiaRepository.save(entity);
+        if (saved.getEstado() == EstadoCirugia.CANCELADA) {
+            turnoService.borrarTurno(saved.getId());
+        }
+        return cirugiaMapper.toResponseDto(saved);
     }
 
     @Override
@@ -153,6 +154,13 @@ public class CirugiaServiceImpl implements CirugiaService {
         cirugia.setEstado(EstadoCirugia.EN_CURSO);
         Cirugia updated = cirugiaRepository.save(cirugia);
         return cirugiaMapper.toResponseDto(updated);
+    }
+
+    @Transactional
+    protected void cancelarCirugiaYLiberarTurnos(Cirugia cirugia) {
+        cirugia.setEstado(EstadoCirugia.CANCELADA);
+        Cirugia saved = cirugiaRepository.save(cirugia);
+        turnoService.borrarTurno(saved.getId());
     }
 
 

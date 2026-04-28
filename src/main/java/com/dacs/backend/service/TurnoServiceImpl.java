@@ -21,6 +21,7 @@ import com.dacs.backend.model.repository.TurnoRepository;
 import com.dacs.backend.model.repository.CirugiaRepository;
 import com.dacs.backend.model.repository.UrgenciaRepository;
 import com.dacs.backend.model.repository.QuirofanoRepository;
+import com.dacs.backend.model.repository.ServicioRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -41,10 +42,13 @@ public class TurnoServiceImpl implements TurnoService {
     @Autowired
     private QuirofanoRepository quirofanoRepository;
 
+    @Autowired
+    private ServicioRepository servicioRepository;
+
     @Override
-    public PaginacionDto.Response<TurnoDTO> getTurnosDisponibles(int pagina, int tamano, LocalDateTime fechaInicio,
+        public PaginacionDto.Response<TurnoDTO> getTurnosDisponibles(int pagina, int tamano, LocalDateTime fechaInicio,
             LocalDateTime fechaFin,
-            int quirofanoId, String estado) {
+            int quirofanoId, String estado, Integer duracionMinutos, Long servicioId) {
         if (fechaInicio == null) {
             fechaInicio = LocalDateTime.now();
         }
@@ -61,13 +65,49 @@ public class TurnoServiceImpl implements TurnoService {
             turnos = turnoRepository.findAllByFechaHoraInicioBetween(fechaInicio, fechaFin);
         }
 
+        Integer duracionResuelta = duracionMinutos;
+        if ((duracionResuelta == null || duracionResuelta <= 0) && servicioId != null) {
+            duracionResuelta = servicioRepository.findById(servicioId)
+                    .map(s -> s.getDuracionMinutos())
+                    .orElseThrow(() -> new IllegalArgumentException("Servicio no encontrado id=" + servicioId));
+        }
+
+        int bloquesNecesarios = 1;
+        if (duracionResuelta != null && duracionResuelta > 0) {
+            bloquesNecesarios = (duracionResuelta + 29) / 30;
+        }
+
+        Map<Long, Map<LocalDateTime, Turno>> turnosPorQuirofanoYFecha = new HashMap<>();
+        for (Turno turno : turnos) {
+            if (turno.getQuirofano() == null || turno.getQuirofano().getId() == null) {
+                continue;
+            }
+            turnosPorQuirofanoYFecha
+                    .computeIfAbsent(turno.getQuirofano().getId(), k -> new HashMap<>())
+                    .put(turno.getFechaHoraInicio(), turno);
+        }
+
         List<com.dacs.backend.dto.TurnoDTO> turnoDTOs = new ArrayList<>();
         for (Turno t : turnos) {
             com.dacs.backend.dto.TurnoDTO dto = new com.dacs.backend.dto.TurnoDTO();
             dto.setId(t.getId());
             dto.setFechaHoraInicio(t.getFechaHoraInicio());
             dto.setEstado(t.getEstado());
-            dto.setDisponible("DISPONIBLE".equalsIgnoreCase(t.getEstado()));
+
+            boolean disponible = "DISPONIBLE".equalsIgnoreCase(t.getEstado());
+            if (disponible && bloquesNecesarios > 1 && t.getQuirofano() != null && t.getQuirofano().getId() != null) {
+                Map<LocalDateTime, Turno> turnosDelQuirofano = turnosPorQuirofanoYFecha.get(t.getQuirofano().getId());
+                for (int i = 1; i < bloquesNecesarios; i++) {
+                    LocalDateTime siguienteBloque = t.getFechaHoraInicio().plusMinutes(i * 30L);
+                    Turno turnoSiguiente = turnosDelQuirofano != null ? turnosDelQuirofano.get(siguienteBloque) : null;
+                    if (turnoSiguiente == null || !"DISPONIBLE".equalsIgnoreCase(turnoSiguiente.getEstado())) {
+                        disponible = false;
+                        break;
+                    }
+                }
+            }
+            dto.setDisponible(disponible);
+
             if (t.getQuirofano() != null) {
                 dto.setQuirofanoId(t.getQuirofano().getId());
             }
@@ -262,6 +302,24 @@ public class TurnoServiceImpl implements TurnoService {
                 cirugiasACancelar.add(bloque.getCirugia().getId());
             }
             bloquesAAsignar.add(bloque);
+        }
+
+        // Also detect cirugias that start before the requested start but whose duration
+        // makes them overlap one or more slots in the requested range.
+        // This covers cases where a cirugia begins earlier (e.g., 08:00) and occupies the
+        // 08:30 slot that an urgencia requests.
+        java.util.List<Cirugia> cirugiasEnQuirofano = cirugiaRepository.findByQuirofanoId(quirofanoId);
+        for (Cirugia cirugia : cirugiasEnQuirofano) {
+            if (cirugia.getFechaHoraInicio() == null || cirugia.getServicio() == null || cirugia.getServicio().getDuracionMinutos() == null) {
+                continue;
+            }
+            LocalDateTime cirugiaStart = cirugia.getFechaHoraInicio();
+            LocalDateTime cirugiaEnd = cirugiaStart.plusMinutes(cirugia.getServicio().getDuracionMinutos());
+            // Overlap condition: cirugiaStart < fechaHoraFin && cirugiaEnd > fechaHoraInicio
+            if (cirugiaStart.isBefore(fechaHoraFin) && cirugiaEnd.isAfter(fechaHoraInicio)) {
+                cirugiasEnRango.add(cirugia.getId());
+                cirugiasACancelar.add(cirugia.getId());
+            }
         }
 
         if (!bloquesFaltantes.isEmpty()) {

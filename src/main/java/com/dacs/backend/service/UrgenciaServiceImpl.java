@@ -185,7 +185,9 @@ public class UrgenciaServiceImpl implements UrgenciaService {
                         cb.like(cb.lower(cb.coalesce(servicioJoin.get("nombre"), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(root.get("estado").as(String.class), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(root.get("tipo"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("prioridad"), "")), likePattern),
+                        // 'prioridad' removed; search will match nivelUrgencia instead
+                        // convert nivelUrgencia to string for search
+                        cb.like(cb.lower(cb.coalesce(root.get("nivelUrgencia").as(String.class), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(root.get("nivelUrgencia").as(String.class), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(quirofanoJoin.get("nombre"), "")), likePattern)));
             }
@@ -203,7 +205,7 @@ public class UrgenciaServiceImpl implements UrgenciaService {
             case "servicio" -> Sort.by(direction, "servicio.nombre");
             case "estado" -> Sort.by(direction, "estado");
             case "tipo" -> Sort.by(direction, "tipo");
-            case "prioridad" -> Sort.by(direction, "prioridad");
+            case "prioridad" -> Sort.by(direction, "nivelUrgencia");
             case "nivelUrgencia" -> Sort.by(direction, "nivelUrgencia");
             case "quirofano" -> Sort.by(direction, "quirofano.nombre");
             case "fechaHoraInicio", "fecha", "hora" -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));

@@ -30,4 +30,7 @@ public interface CirugiaRepository extends JpaRepository<Cirugia, Long>, JpaSpec
     Long countByEstadoAndFechaHoraInicioBetween(EstadoCirugia programada, LocalDateTime startOfDay,
             LocalDateTime endOfDay);
 
+    // Find all cirugias for a given quirofano (used to detect overlaps)
+    java.util.List<Cirugia> findByQuirofanoId(Long quirofanoId);
+
 }

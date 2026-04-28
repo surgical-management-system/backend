@@ -14,7 +14,6 @@ public class UrgenciaDTO {
     @Data
     public static class Response {
         private Long id;
-        private String prioridad;
         private Integer nivelUrgencia;
         private LocalDateTime fechaHoraInicio;
         private EstadoUrgencia estado;
@@ -27,7 +26,6 @@ public class UrgenciaDTO {
 
     @Data
     public static class Create {
-        private String prioridad;
         private Integer nivelUrgencia;
         private LocalDateTime fechaHoraInicio;
         private EstadoUrgencia estado;

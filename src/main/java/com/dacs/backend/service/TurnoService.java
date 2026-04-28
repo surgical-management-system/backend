@@ -9,7 +9,8 @@ import com.dacs.backend.model.entity.Turno;
 
 public interface TurnoService {
 
-    PaginacionDto.Response<TurnoDTO> getTurnosDisponibles(int pagina, int tamano, LocalDateTime fechaInicio, LocalDateTime fechaFin, int quirofanoId, String estado);
+    PaginacionDto.Response<TurnoDTO> getTurnosDisponibles(int pagina, int tamano, LocalDateTime fechaInicio,
+            LocalDateTime fechaFin, int quirofanoId, String estado, Integer duracionMinutos, Long servicioId);
 
     Boolean verificarDisponibilidadTurno(Long quirofanoId, LocalDateTime fechaHoraInicio, LocalDateTime fechaHoraFin);
 

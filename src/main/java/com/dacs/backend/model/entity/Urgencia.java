@@ -22,8 +22,6 @@ public class Urgencia {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String prioridad;
 
     @Column
     private Integer nivelUrgencia;

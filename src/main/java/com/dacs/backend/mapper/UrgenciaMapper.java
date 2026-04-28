@@ -35,7 +35,6 @@ public class UrgenciaMapper {
         validateNivelUrgencia(dto.getNivelUrgencia());
 
         Urgencia entity = new Urgencia();
-        entity.setPrioridad(dto.getPrioridad());
         entity.setNivelUrgencia(dto.getNivelUrgencia());
         entity.setFechaHoraInicio(dto.getFechaHoraInicio());
         entity.setEstado(dto.getEstado() != null ? dto.getEstado() : com.dacs.backend.model.entity.EstadoUrgencia.PENDIENTE);
