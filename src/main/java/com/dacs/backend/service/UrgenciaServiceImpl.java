@@ -33,6 +33,9 @@ public class UrgenciaServiceImpl implements UrgenciaService {
     @Autowired
     private UrgenciaMapper urgenciaMapper;
 
+    @Autowired
+    private TurnoService turnoService;
+
     @Override
     public Optional<Urgencia> getById(Long id) {
         return urgenciaRepository.findById(id);
@@ -43,6 +46,14 @@ public class UrgenciaServiceImpl implements UrgenciaService {
     public UrgenciaDTO.Response createUrgencia(UrgenciaDTO.Create request) {
         Urgencia entity = urgenciaMapper.toEntity(request);
         Urgencia saved = urgenciaRepository.save(entity);
+        if (saved.getQuirofano() != null && saved.getServicio() != null && saved.getFechaHoraInicio() != null
+                && saved.getServicio().getDuracionMinutos() != null) {
+            turnoService.reservarTurnosParaUrgencia(
+                    saved.getId(),
+                    saved.getQuirofano().getId(),
+                    saved.getFechaHoraInicio(),
+                    saved.getFechaHoraInicio().plusMinutes(saved.getServicio().getDuracionMinutos()));
+        }
         return urgenciaMapper.toResponseDto(saved);
     }
 
@@ -63,6 +74,7 @@ public class UrgenciaServiceImpl implements UrgenciaService {
                 .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada id=" + id));
         urgencia.setEstado(EstadoUrgencia.CANCELADA);
         urgenciaRepository.save(urgencia);
+        turnoService.borrarTurnosPorUrgencia(id);
     }
 
     @Override
@@ -95,6 +107,24 @@ public class UrgenciaServiceImpl implements UrgenciaService {
         }
 
         urgencia.setEstado(EstadoUrgencia.EN_CURSO);
+        Urgencia updated = urgenciaRepository.save(urgencia);
+        return urgenciaMapper.toResponseDto(updated);
+    }
+
+    @Override
+    @Transactional
+    public UrgenciaDTO.Response finalizarUrgencia(long urgenciaId) {
+        Urgencia urgencia = urgenciaRepository.findById(urgenciaId)
+                .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada id=" + urgenciaId));
+
+        if (urgencia.getEstado() == EstadoUrgencia.FINALIZADA) {
+            throw new IllegalArgumentException("No se puede finalizar una urgencia ya finalizada");
+        }
+        if (urgencia.getEstado() == EstadoUrgencia.CANCELADA) {
+            throw new IllegalArgumentException("No se puede finalizar una urgencia cancelada");
+        }
+
+        urgencia.setEstado(EstadoUrgencia.FINALIZADA);
         Urgencia updated = urgenciaRepository.save(urgencia);
         return urgenciaMapper.toResponseDto(updated);
     }

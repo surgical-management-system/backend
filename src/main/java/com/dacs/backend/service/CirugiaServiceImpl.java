@@ -102,6 +102,7 @@ public class CirugiaServiceImpl implements CirugiaService {
         // Soft delete: cambiar estado a CANCELADA
         cirugia.setEstado(EstadoCirugia.CANCELADA);
         cirugiaRepository.save(cirugia);
+        turnoService.borrarTurno(id);
     }
 
     @Override

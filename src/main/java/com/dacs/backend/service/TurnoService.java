@@ -18,7 +18,12 @@ public interface TurnoService {
     Turno reservarTurnosParaCirugia(Long cirugiaId, Long quirofanoId, LocalDateTime fechaHoraInicio,
             LocalDateTime fechaHoraFin);
 
+        Turno reservarTurnosParaUrgencia(Long urgenciaId, Long quirofanoId, LocalDateTime fechaHoraInicio,
+            LocalDateTime fechaHoraFin);
+
     void borrarTurno(Long cirugiaId);
+
+        void borrarTurnosPorUrgencia(Long urgenciaId);
 
     void generarTurnosAutomaticaMensual();
 }

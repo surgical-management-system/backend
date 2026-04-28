@@ -30,6 +30,11 @@ public class Turno {
     private Cirugia cirugia;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "urgencia_id")
+    @Nullable
+    private Urgencia urgencia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quirofano_id", nullable = false)
     private Quirofano quirofano;
 

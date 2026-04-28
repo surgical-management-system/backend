@@ -26,6 +26,8 @@ public interface TurnoRepository extends JpaRepository<Turno, Long> {
 
     List<Turno> findAllByCirugiaId(Long cirugiaId);
 
+        List<Turno> findAllByUrgenciaId(Long urgenciaId);
+
     @Query("SELECT t FROM Turno t WHERE t.quirofano.id = :quirofanoId AND t.fechaHoraInicio >= :start AND t.fechaHoraInicio < :end")
     List<Turno> findAllInRangeByQuirofanoId(@Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,

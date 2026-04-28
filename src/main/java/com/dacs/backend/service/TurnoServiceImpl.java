@@ -3,17 +3,23 @@ package com.dacs.backend.service;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import com.dacs.backend.model.entity.Turno;
 import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.TurnoDTO;
 import com.dacs.backend.model.entity.Cirugia;
+import com.dacs.backend.model.entity.EstadoCirugia;
+import com.dacs.backend.model.entity.Urgencia;
 import com.dacs.backend.model.entity.Quirofano;
 import com.dacs.backend.model.repository.TurnoRepository;
 import com.dacs.backend.model.repository.CirugiaRepository;
+import com.dacs.backend.model.repository.UrgenciaRepository;
 import com.dacs.backend.model.repository.QuirofanoRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +34,10 @@ public class TurnoServiceImpl implements TurnoService {
 
     @Autowired
     private CirugiaRepository cirugiaRepository;
+
+    @Autowired
+    private UrgenciaRepository urgenciaRepository;
+
     @Autowired
     private QuirofanoRepository quirofanoRepository;
 
@@ -35,20 +45,12 @@ public class TurnoServiceImpl implements TurnoService {
     public PaginacionDto.Response<TurnoDTO> getTurnosDisponibles(int pagina, int tamano, LocalDateTime fechaInicio,
             LocalDateTime fechaFin,
             int quirofanoId, String estado) {
-        // Si fechaInicio o fechaFin llegan como string vacío, asignar valores por defecto
         if (fechaInicio == null) {
             fechaInicio = LocalDateTime.now();
         }
         if (fechaFin == null) {
             fechaFin = fechaInicio.plusDays(30);
         }
-
-
-        // --- INICIO CAMBIO: Filtrar turnos realmente disponibles para la duración ---
-        // Suponiendo que la duración del servicio se recibe como parámetro adicional (ej: minutosDuracion)
-        int minutosDuracion = 60; // <-- AJUSTAR: obtener este valor según tu lógica/endpoint
-        int bloquesNecesarios = minutosDuracion / 30;
-        if (minutosDuracion % 30 != 0) bloquesNecesarios++;
 
         List<Turno> turnos;
         boolean filtrarQuirofano = (quirofanoId != 0);
@@ -59,37 +61,24 @@ public class TurnoServiceImpl implements TurnoService {
             turnos = turnoRepository.findAllByFechaHoraInicioBetween(fechaInicio, fechaFin);
         }
 
-        // Solo considerar turnos DISPONIBLE cuyo bloque y los siguientes estén libres
         List<com.dacs.backend.dto.TurnoDTO> turnoDTOs = new ArrayList<>();
         for (Turno t : turnos) {
-            if (!"DISPONIBLE".equalsIgnoreCase(t.getEstado())) continue;
-            boolean disponible = true;
-            LocalDateTime actual = t.getFechaHoraInicio();
-            for (int i = 0; i < bloquesNecesarios; i++) {
-                LocalDateTime bloque = actual.plusMinutes(i * 30);
-                boolean bloqueLibre = turnos.stream().anyMatch(tt ->
-                    tt.getFechaHoraInicio().equals(bloque) && "DISPONIBLE".equalsIgnoreCase(tt.getEstado())
-                );
-                if (!bloqueLibre) {
-                    disponible = false;
-                    break;
-                }
+            com.dacs.backend.dto.TurnoDTO dto = new com.dacs.backend.dto.TurnoDTO();
+            dto.setId(t.getId());
+            dto.setFechaHoraInicio(t.getFechaHoraInicio());
+            dto.setEstado(t.getEstado());
+            dto.setDisponible("DISPONIBLE".equalsIgnoreCase(t.getEstado()));
+            if (t.getQuirofano() != null) {
+                dto.setQuirofanoId(t.getQuirofano().getId());
             }
-            if (disponible) {
-                com.dacs.backend.dto.TurnoDTO dto = new com.dacs.backend.dto.TurnoDTO();
-                dto.setId(t.getId());
-                dto.setFechaHoraInicio(t.getFechaHoraInicio());
-                dto.setEstado(t.getEstado());
-                if (t.getQuirofano() != null) {
-                    dto.setQuirofanoId(t.getQuirofano().getId());
-                }
-                if (t.getCirugia() != null) {
-                    dto.setCirugiaId(t.getCirugia().getId());
-                }
-                turnoDTOs.add(dto);
+            if (t.getCirugia() != null) {
+                dto.setCirugiaId(t.getCirugia().getId());
             }
+            if (t.getUrgencia() != null) {
+                dto.setUrgenciaId(t.getUrgencia().getId());
+            }
+            turnoDTOs.add(dto);
         }
-        // --- FIN CAMBIO ---
 
         // Pagination logic
         int totalElementos = turnoDTOs.size();
@@ -165,6 +154,7 @@ public class TurnoServiceImpl implements TurnoService {
 
         for (Turno t : turnosEnRango) {
             t.setCirugia(cirugia);
+            t.setUrgencia(null);
             t.setEstado("ASIGNADO");
         }
         turnoRepository.saveAll(turnosEnRango);
@@ -215,7 +205,117 @@ public class TurnoServiceImpl implements TurnoService {
 
         for (Turno turno : bloquesAAsignar) {
             turno.setCirugia(cirugia);
+            turno.setUrgencia(null);
             turno.setEstado("ASIGNADO");
+        }
+        turnoRepository.saveAll(bloquesAAsignar);
+        return bloquesAAsignar.get(0);
+    }
+
+    @Override
+    @Transactional
+    public Turno reservarTurnosParaUrgencia(Long urgenciaId, Long quirofanoId, LocalDateTime fechaHoraInicio,
+            LocalDateTime fechaHoraFin) {
+        if (fechaHoraInicio == null || fechaHoraFin == null || !fechaHoraFin.isAfter(fechaHoraInicio)) {
+            throw new IllegalArgumentException("El rango de fechas es inválido.");
+        }
+        if (fechaHoraInicio.getMinute() % 30 != 0 || fechaHoraInicio.getSecond() != 0 || fechaHoraInicio.getNano() != 0
+                || fechaHoraFin.getMinute() % 30 != 0 || fechaHoraFin.getSecond() != 0 || fechaHoraFin.getNano() != 0) {
+            throw new IllegalArgumentException("Las fechas deben estar alineadas a bloques de 30 minutos.");
+        }
+
+        Urgencia urgencia = urgenciaRepository.findById(urgenciaId)
+                .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada con ID: " + urgenciaId));
+
+        if (urgencia.getServicio() == null || urgencia.getServicio().getDuracionMinutos() == null
+            || urgencia.getServicio().getDuracionMinutos() <= 0) {
+            throw new IllegalArgumentException("La urgencia no tiene una duración válida asociada.");
+        }
+
+        int bloquesNecesarios = (urgencia.getServicio().getDuracionMinutos() + 29) / 30;
+
+        List<Turno> turnosBloqueados = turnoRepository.lockAllInRangeByQuirofanoId(
+                fechaHoraInicio,
+                fechaHoraFin,
+                quirofanoId);
+
+        Map<LocalDateTime, Turno> turnosPorFecha = new HashMap<>();
+        for (Turno turno : turnosBloqueados) {
+            turnosPorFecha.put(turno.getFechaHoraInicio(), turno);
+        }
+
+        List<Turno> bloquesAAsignar = new ArrayList<>();
+        Set<Long> cirugiasEnRango = new HashSet<>();
+        List<LocalDateTime> bloquesFaltantes = new ArrayList<>();
+        Set<Long> cirugiasACancelar = new HashSet<>();
+        for (LocalDateTime bloqueEsperado = fechaHoraInicio; bloqueEsperado.isBefore(fechaHoraFin); bloqueEsperado = bloqueEsperado.plusMinutes(30)) {
+            Turno bloque = turnosPorFecha.get(bloqueEsperado);
+            if (bloque == null) {
+                bloquesFaltantes.add(bloqueEsperado);
+                continue;
+            }
+            if (bloque.getUrgencia() != null && !bloque.getUrgencia().getId().equals(urgenciaId)) {
+                throw new IllegalArgumentException("Ya existe una urgencia asignada en el rango solicitado.");
+            }
+            if (bloque.getCirugia() != null) {
+                cirugiasEnRango.add(bloque.getCirugia().getId());
+                cirugiasACancelar.add(bloque.getCirugia().getId());
+            }
+            bloquesAAsignar.add(bloque);
+        }
+
+        if (!bloquesFaltantes.isEmpty()) {
+            if (cirugiasEnRango.size() == 1) {
+                Long cirugiaId = cirugiasEnRango.iterator().next();
+                List<Turno> turnosDeCirugia = turnoRepository.findAllByCirugiaId(cirugiaId);
+                if (turnosDeCirugia.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "La cirugía existente no tiene turnos asignados para sobreescribir.");
+                }
+
+                turnosDeCirugia.sort(Comparator.comparing(Turno::getFechaHoraInicio));
+                if (turnosDeCirugia.size() < bloquesNecesarios) {
+                    throw new IllegalArgumentException(
+                            "La cirugía existente no tiene suficientes turnos para cubrir la duración de la urgencia.");
+                }
+
+                Cirugia cirugia = cirugiaRepository.findById(cirugiaId)
+                        .orElseThrow(() -> new IllegalArgumentException("Cirugía no encontrada con ID: " + cirugiaId));
+                cirugia.setEstado(EstadoCirugia.CANCELADA);
+                cirugiaRepository.save(cirugia);
+
+                List<Turno> turnosOcupadosPorUrgencia = turnosDeCirugia.subList(0, bloquesNecesarios);
+                List<Turno> turnosLiberados = turnosDeCirugia.subList(bloquesNecesarios, turnosDeCirugia.size());
+
+                for (Turno turno : turnosOcupadosPorUrgencia) {
+                    turno.setCirugia(null);
+                    turno.setUrgencia(urgencia);
+                    turno.setEstado("ASIGNADO_URGENCIA");
+                }
+
+                for (Turno turno : turnosLiberados) {
+                    turno.setCirugia(null);
+                    turno.setUrgencia(null);
+                    turno.setEstado("DISPONIBLE");
+                }
+
+                List<Turno> turnosActualizados = new ArrayList<>(turnosDeCirugia);
+                turnoRepository.saveAll(turnosActualizados);
+                return turnosOcupadosPorUrgencia.get(0);
+            }
+
+            throw new IllegalArgumentException(
+                    "No existe una cirugía única para sobreescribir en el rango solicitado.");
+        }
+
+        for (Long cirugiaId : cirugiasACancelar) {
+            cancelarCirugiaYLiberarTurnos(cirugiaId);
+        }
+
+        for (Turno turno : bloquesAAsignar) {
+            turno.setCirugia(null);
+            turno.setUrgencia(urgencia);
+            turno.setEstado("ASIGNADO_URGENCIA");
         }
         turnoRepository.saveAll(bloquesAAsignar);
         return bloquesAAsignar.get(0);
@@ -227,8 +327,28 @@ public class TurnoServiceImpl implements TurnoService {
         for (Turno turno : turnos) {
             turno.setEstado("DISPONIBLE");
             turno.setCirugia(null);
+            turno.setUrgencia(null);
             turnoRepository.save(turno);
         }
+    }
+
+    @Override
+    public void borrarTurnosPorUrgencia(Long urgenciaId) {
+        List<Turno> turnos = turnoRepository.findAllByUrgenciaId(urgenciaId);
+        for (Turno turno : turnos) {
+            turno.setEstado("DISPONIBLE");
+            turno.setCirugia(null);
+            turno.setUrgencia(null);
+            turnoRepository.save(turno);
+        }
+    }
+
+    private void cancelarCirugiaYLiberarTurnos(Long cirugiaId) {
+        Cirugia cirugia = cirugiaRepository.findById(cirugiaId)
+                .orElseThrow(() -> new IllegalArgumentException("Cirugía no encontrada con ID: " + cirugiaId));
+        cirugia.setEstado(EstadoCirugia.CANCELADA);
+        cirugiaRepository.save(cirugia);
+        borrarTurno(cirugiaId);
     }
 
     // Método para generar los turnos
@@ -257,6 +377,7 @@ public class TurnoServiceImpl implements TurnoService {
                     turno.setQuirofano(quirofano);
                     turno.setEstado("DISPONIBLE");
                     turno.setCirugia(null);
+                    turno.setUrgencia(null);
                     turnoRepository.save(turno);
                 }
                 horaInicio = horaInicio.plusMinutes(30);

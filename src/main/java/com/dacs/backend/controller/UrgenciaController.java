@@ -78,6 +78,12 @@ public class UrgenciaController {
         return ResponseEntity.ok(response);
     }
 
+    @PutMapping("/{id}/finalizar")
+    public ResponseEntity<UrgenciaDTO.Response> finalizarUrgencia(@PathVariable Long id) {
+        UrgenciaDTO.Response response = urgenciaService.finalizarUrgencia(id);
+        return ResponseEntity.ok(response);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         urgenciaService.delete(id);
