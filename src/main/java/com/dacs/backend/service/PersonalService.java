@@ -12,6 +12,8 @@ public interface PersonalService {
 
     PaginacionDto<PersonalDto.Response> getAll(int page, int size, String search);
 
+    PaginacionDto<PersonalDto.Response> getAll(int page, int size, String search, String role);
+
     boolean existsByLegajo(String legajo);
 
 

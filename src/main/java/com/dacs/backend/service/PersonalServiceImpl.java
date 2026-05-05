@@ -64,6 +64,11 @@ public class PersonalServiceImpl implements PersonalService {
 
    @Override
    public PaginacionDto<PersonalDto.Response> getAll(int page, int size, String search) {
+       return getAll(page, size, search, null);
+   }
+
+   @Override
+   public PaginacionDto<PersonalDto.Response> getAll(int page, int size, String search, String role) {
        Pageable pageable = PageRequest.of(page, size);
        Page<Personal> personalPage;
        
@@ -73,7 +78,9 @@ public class PersonalServiceImpl implements PersonalService {
            personalPage = personalRepository.findAll(pageable);
        }
        
+       // Filter by role if specified
        List<PersonalDto.Response> content = personalPage.getContent().stream()
+               .filter(personal -> role == null || role.isEmpty() || role.equalsIgnoreCase(personal.getRol()))
                .map(personal -> modelMapper.map(personal, PersonalDto.Response.class))
                .toList();
        

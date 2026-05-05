@@ -30,9 +30,10 @@ public class PersonalController {
     public PaginacionDto<PersonalDto.Response> get(
             @RequestParam(name = "page", required = false, defaultValue = "0") int page,
             @RequestParam(name = "size", required = false, defaultValue = "16") int size,
-            @RequestParam(name = "search", required = false) String search) {
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "role", required = false) String role) {
 
-        return personalService.getAll(page, size, search);
+        return personalService.getAll(page, size, search, role);
     }
 
     @PostMapping("")
