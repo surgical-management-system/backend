@@ -185,10 +185,6 @@ public class UrgenciaServiceImpl implements UrgenciaService {
                         cb.like(cb.lower(cb.coalesce(servicioJoin.get("nombre"), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(root.get("estado").as(String.class), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(root.get("tipo"), "")), likePattern),
-                        // 'prioridad' removed; search will match nivelUrgencia instead
-                        // convert nivelUrgencia to string for search
-                        cb.like(cb.lower(cb.coalesce(root.get("nivelUrgencia").as(String.class), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("nivelUrgencia").as(String.class), "")), likePattern),
                         cb.like(cb.lower(cb.coalesce(quirofanoJoin.get("nombre"), "")), likePattern)));
             }
 

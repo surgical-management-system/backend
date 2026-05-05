@@ -79,8 +79,15 @@ public class PersonalServiceImpl implements PersonalService {
        }
        
        // Filter by role if specified
+       String normalizedRole = role == null ? null : role.replace('_', ' ').trim().toLowerCase();
        List<PersonalDto.Response> content = personalPage.getContent().stream()
-               .filter(personal -> role == null || role.isEmpty() || role.equalsIgnoreCase(personal.getRol()))
+               .filter(personal -> {
+                   if (normalizedRole == null || normalizedRole.isEmpty()) {
+                       return true;
+                   }
+                   String personalRole = personal.getRol() == null ? "" : personal.getRol().replace('_', ' ').trim().toLowerCase();
+                   return normalizedRole.equals(personalRole);
+               })
                .map(personal -> modelMapper.map(personal, PersonalDto.Response.class))
                .toList();
        
