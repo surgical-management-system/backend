@@ -1,21 +1,23 @@
 package com.dacs.backend.service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Interfaz mínima para servicios genéricos.
+ * Aplica el principio de Interface Segregation (ISP): solo métodos esenciales.
+ * Implementaciones específicas pueden heredar de esta y agregar métodos adicionales.
+ */
 public interface CommonService<E> {
 	
-	public Optional<E> getById(Long id);
+	Optional<E> getById(Long id);
 	
-	public Boolean existById(Long id);
+	Boolean existById(Long id);
 	
-	public void delete(Long id);
+	void delete(Long id);
 	
-	public E save(E entity);
-		
-	public E getBy(Map<String,Object> filter);
+	E save(E entity);
 
-	public List<E> getAll();
+	List<E> getAll();
 
 }

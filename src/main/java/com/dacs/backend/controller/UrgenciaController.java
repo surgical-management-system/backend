@@ -1,6 +1,5 @@
 package com.dacs.backend.controller;
 
-import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,20 +42,11 @@ public class UrgenciaController {
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "sort", required = false, defaultValue = "fechaHoraInicio") String sort,
             @RequestParam(name = "order", required = false, defaultValue = "asc") String order) {
-        EstadoUrgencia estadoEnum = parseEstado(estado);
-        PaginacionDto<UrgenciaDTO.Response> urgencias = urgenciaService.getUrgencias(pagina, tamano, parseFecha(fechaInicio), parseFecha(fechaFin), estadoEnum, search, sort, order);
+        EstadoUrgencia estadoEnum = ControllerUtils.parseEstado(estado, EstadoUrgencia.class);
+        PaginacionDto<UrgenciaDTO.Response> urgencias = urgenciaService.getUrgencias(pagina, tamano,
+                ControllerUtils.parseFecha(fechaInicio), ControllerUtils.parseFecha(fechaFin), estadoEnum, search,
+                sort, order);
         return ResponseEntity.ok(urgencias);
-    }
-
-    private EstadoUrgencia parseEstado(String estado) {
-        if (estado == null || estado.isBlank()) {
-            return null;
-        }
-        try {
-            return EstadoUrgencia.valueOf(estado.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 
     @PostMapping("")
@@ -102,12 +92,5 @@ public class UrgenciaController {
         List<MiembroEquipoMedicoDto.Response> resp = equipoMedicoService.saveEquipoMedicoUrgencia(id,
                 entityEquipoMedico);
         return ResponseEntity.status(HttpStatus.CREATED).body(resp);
-    }
-
-    public static LocalDate parseFecha(String fecha) {
-        if (fecha == null || fecha.isEmpty()) {
-            return null;
-        }
-        return LocalDate.parse(fecha);
     }
 }

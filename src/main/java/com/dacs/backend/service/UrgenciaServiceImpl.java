@@ -1,17 +1,14 @@
 package com.dacs.backend.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,20 +18,20 @@ import com.dacs.backend.mapper.UrgenciaMapper;
 import com.dacs.backend.model.entity.EstadoUrgencia;
 import com.dacs.backend.model.entity.Urgencia;
 import com.dacs.backend.model.repository.UrgenciaRepository;
+import com.dacs.backend.service.helper.ProcedimientoSpecificationBuilder;
+import com.dacs.backend.service.helper.ProcedimientoSortBuilder;
 
-import jakarta.persistence.criteria.JoinType;
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class UrgenciaServiceImpl implements UrgenciaService {
 
-    @Autowired
-    private UrgenciaRepository urgenciaRepository;
-
-    @Autowired
-    private UrgenciaMapper urgenciaMapper;
-
-    @Autowired
-    private TurnoService turnoService;
+    private final UrgenciaRepository urgenciaRepository;
+    private final UrgenciaMapper urgenciaMapper;
+    private final TurnoService turnoService;
+    private final ProcedimientoSpecificationBuilder specificationBuilder;
+    private final ProcedimientoSortBuilder sortBuilder;
 
     @Override
     public Optional<Urgencia> getById(Long id) {
@@ -72,14 +69,9 @@ public class UrgenciaServiceImpl implements UrgenciaService {
     public void delete(Long id) {
         Urgencia urgencia = urgenciaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada id=" + id));
-        urgencia.setEstado(EstadoUrgencia.CANCELADA);
+        urgencia.setEstado(urgencia.getEstado().cancelar());
         urgenciaRepository.save(urgencia);
         turnoService.borrarTurnosPorUrgencia(id);
-    }
-
-    @Override
-    public Urgencia getBy(Map<String, Object> filter) {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -99,14 +91,7 @@ public class UrgenciaServiceImpl implements UrgenciaService {
         Urgencia urgencia = urgenciaRepository.findById(urgenciaId)
                 .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada id=" + urgenciaId));
 
-        if (urgencia.getEstado() == EstadoUrgencia.FINALIZADA) {
-            throw new IllegalArgumentException("No se puede inicializar una urgencia finalizada");
-        }
-        if (urgencia.getEstado() == EstadoUrgencia.CANCELADA) {
-            throw new IllegalArgumentException("No se puede inicializar una urgencia cancelada");
-        }
-
-        urgencia.setEstado(EstadoUrgencia.EN_CURSO);
+        urgencia.setEstado(urgencia.getEstado().inicializar());
         Urgencia updated = urgenciaRepository.save(urgencia);
         return urgenciaMapper.toResponseDto(updated);
     }
@@ -117,14 +102,7 @@ public class UrgenciaServiceImpl implements UrgenciaService {
         Urgencia urgencia = urgenciaRepository.findById(urgenciaId)
                 .orElseThrow(() -> new IllegalArgumentException("Urgencia no encontrada id=" + urgenciaId));
 
-        if (urgencia.getEstado() == EstadoUrgencia.FINALIZADA) {
-            throw new IllegalArgumentException("No se puede finalizar una urgencia ya finalizada");
-        }
-        if (urgencia.getEstado() == EstadoUrgencia.CANCELADA) {
-            throw new IllegalArgumentException("No se puede finalizar una urgencia cancelada");
-        }
-
-        urgencia.setEstado(EstadoUrgencia.FINALIZADA);
+        urgencia.setEstado(urgencia.getEstado().finalizar());
         Urgencia updated = urgenciaRepository.save(urgencia);
         return urgenciaMapper.toResponseDto(updated);
     }
@@ -137,9 +115,10 @@ public class UrgenciaServiceImpl implements UrgenciaService {
     @Override
     public PaginacionDto<UrgenciaDTO.Response> getUrgencias(int pagina, int tamano, LocalDate fechaInicio,
             LocalDate fechaFin, EstadoUrgencia estado, String search, String sort, String order) {
-        Sort sortSpec = buildSort(sort, order);
+        var sortSpec = sortBuilder.build(sort, order, "nivelUrgencia");
         Pageable pageable = PageRequest.of(pagina, tamano, sortSpec);
-        Page<Urgencia> page = urgenciaRepository.findAll(buildSpecification(fechaInicio, fechaFin, estado, search), pageable);
+        Page<Urgencia> page = urgenciaRepository.findAll(
+                specificationBuilder.build(fechaInicio, fechaFin, estado, search, "nivelUrgencia"), pageable);
 
         List<Urgencia> entidades = page.getContent();
         List<UrgenciaDTO.Response> dtos = entidades.stream()
@@ -155,57 +134,23 @@ public class UrgenciaServiceImpl implements UrgenciaService {
         return response;
     }
 
-    private Specification<Urgencia> buildSpecification(LocalDate fechaInicio, LocalDate fechaFin, EstadoUrgencia estado,
-            String search) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-
-            List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-
-            if (fechaInicio != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaHoraInicio"), fechaInicio.atStartOfDay()));
-            }
-            if (fechaFin != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("fechaHoraInicio"), fechaFin.atTime(23, 59, 59)));
-            }
-            if (estado != null) {
-                predicates.add(cb.equal(root.get("estado"), estado));
-            }
-
-            if (search != null && !search.isBlank()) {
-                String likePattern = "%" + search.trim().toLowerCase() + "%";
-                var pacienteJoin = root.join("paciente", JoinType.LEFT);
-                var servicioJoin = root.join("servicio", JoinType.LEFT);
-                var quirofanoJoin = root.join("quirofano", JoinType.LEFT);
-
-                predicates.add(cb.or(
-                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("nombre"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("apellido"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("dni"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(servicioJoin.get("nombre"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("estado").as(String.class), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("tipo"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(quirofanoJoin.get("nombre"), "")), likePattern)));
-            }
-
-            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-        };
+    @Override
+    public Long countUrgenciasHoy() {
+        LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
+        LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
+        return urgenciaRepository.countByEstadoAndFechaHoraInicioBetween(EstadoUrgencia.PROGRAMADA, startOfDay, endOfDay);
     }
 
-    private Sort buildSort(String sort, String order) {
-        Sort.Direction direction = "desc".equalsIgnoreCase(order) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        String normalizedSort = sort == null ? "fechaHoraInicio" : sort.trim();
+    @Override
+    public Long countUrgenciasEstaSemana() {
+        LocalDate today = LocalDate.now();
+        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
 
-        return switch (normalizedSort) {
-            case "paciente" -> Sort.by(direction, "paciente.apellido").and(Sort.by(direction, "paciente.nombre"));
-            case "servicio" -> Sort.by(direction, "servicio.nombre");
-            case "estado" -> Sort.by(direction, "estado");
-            case "tipo" -> Sort.by(direction, "tipo");
-            case "prioridad" -> Sort.by(direction, "nivelUrgencia");
-            case "nivelUrgencia" -> Sort.by(direction, "nivelUrgencia");
-            case "quirofano" -> Sort.by(direction, "quirofano.nombre");
-            case "fechaHoraInicio", "fecha", "hora" -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));
-            default -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));
-        };
+        LocalDateTime startOfWeekDateTime = startOfWeek.atStartOfDay();
+        LocalDateTime endOfWeekDateTime = endOfWeek.atTime(23, 59, 59);
+
+        return urgenciaRepository.countByEstadoAndFechaHoraInicioBetween(EstadoUrgencia.PROGRAMADA, startOfWeekDateTime,
+                endOfWeekDateTime);
     }
 }

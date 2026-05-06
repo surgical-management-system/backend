@@ -1,16 +1,15 @@
 package com.dacs.backend.controller;
 
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-
 import com.dacs.backend.dto.MiembroEquipoMedicoDto;
 import com.dacs.backend.dto.CirugiaDTO;
 import com.dacs.backend.service.CirugiaService;
 
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.http.HttpStatus;
@@ -21,7 +20,6 @@ import com.dacs.backend.dto.ServicioDto;
 import com.dacs.backend.model.entity.EstadoCirugia;
 import com.dacs.backend.service.EquipoMedicoService;
 
-import java.time.LocalDate;
 import java.util.List;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,21 +44,11 @@ public class CirugiaController {
             @RequestParam(name = "search", required = false) String search,
             @RequestParam(name = "sort", required = false, defaultValue = "fechaHoraInicio") String sort,
             @RequestParam(name = "order", required = false, defaultValue = "asc") String order) {
-                System.err.println("tamano: " + tamano);
-        EstadoCirugia estadoEnum = parseEstado(estado);
-        PaginacionDto<CirugiaDTO.Response> cirugias = cirugiaService.getCirugias(pagina, tamano, parseFecha(fechaInicio), parseFecha(fechaFin), estadoEnum, search, sort, order);
+        EstadoCirugia estadoEnum = ControllerUtils.parseEstado(estado, EstadoCirugia.class);
+        PaginacionDto<CirugiaDTO.Response> cirugias = cirugiaService.getCirugias(pagina, tamano,
+                ControllerUtils.parseFecha(fechaInicio), ControllerUtils.parseFecha(fechaFin), estadoEnum, search,
+                sort, order);
         return ResponseEntity.ok(cirugias);
-    }
-
-    private EstadoCirugia parseEstado(String estado) {
-        if (estado == null || estado.isBlank()) {
-            return null;
-        }
-        try {
-            return EstadoCirugia.valueOf(estado.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 
     @PostMapping("")
@@ -81,13 +69,6 @@ public class CirugiaController {
         CirugiaDTO.Response entity = cirugiaService.inicializarCirugia(id);
         return ResponseEntity.ok(entity);
     }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Object> delete(@PathVariable Long id) {
-        cirugiaService.delete(id);
-        return ResponseEntity.noContent().build();
-    }
-
     @GetMapping("/{id}/equipo-medico")
     public ResponseEntity<List<MiembroEquipoMedicoDto.Response>> getEquipoMedico(@PathVariable Long id) {
 
@@ -106,13 +87,6 @@ public class CirugiaController {
     @GetMapping("/servicios")
     public ResponseEntity<List<ServicioDto>> getServicios(@RequestParam int pagina, @RequestParam int tamano) {
         return ResponseEntity.ok(cirugiaService.getServicios(pagina, tamano));
-    }
-
-    public static LocalDate parseFecha(String fecha) {
-        if (fecha == null || fecha.isEmpty()) {
-            return null;
-        }
-        return LocalDate.parse(fecha); // formato ISO: "yyyy-MM-dd"
     }
 
     @PutMapping("/{id}/finalizar")

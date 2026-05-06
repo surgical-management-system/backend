@@ -19,4 +19,8 @@ public interface UrgenciaService extends CommonService<Urgencia> {
     UrgenciaDTO.Response inicializarUrgencia(long urgenciaId);
 
     UrgenciaDTO.Response finalizarUrgencia(long urgenciaId);
+
+    Long countUrgenciasHoy();
+
+    Long countUrgenciasEstaSemana();
 }

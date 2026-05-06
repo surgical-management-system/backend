@@ -45,10 +45,4 @@ public class TipoIntervencionServiceImpl implements TipoIntervencionService {
     public void delete(Long id) {
         Optional<TipoIntervencionDto> tipoIntervencion = getById(id);
     }
-
-    @Override
-    public TipoIntervencionDto getBy(java.util.Map<String, Object> filter) {
-        throw new UnsupportedOperationException();
-    }
-    
 }

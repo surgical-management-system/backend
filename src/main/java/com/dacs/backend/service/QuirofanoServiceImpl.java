@@ -47,11 +47,6 @@ public class QuirofanoServiceImpl implements QuirofanoService {
         quirofanoRepository.delete(quirofano.get());
     }
 
-    @Override
-    public Quirofano getBy(java.util.Map<String, Object> filter) {
-        throw new UnsupportedOperationException();
-    }
-
 
 
     public List<Quirofano> quirofanosDisponibles() {

@@ -9,15 +9,10 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,34 +22,32 @@ import com.dacs.backend.dto.PaginacionDto;
 import com.dacs.backend.dto.ServicioDto;
 import com.dacs.backend.mapper.CirugiaMapper;
 import com.dacs.backend.model.entity.Cirugia;
-import com.dacs.backend.model.entity.EquipoMedico;
 import com.dacs.backend.model.entity.EstadoCirugia;
 import com.dacs.backend.model.repository.CirugiaRepository;
 import com.dacs.backend.model.repository.PacienteRepository;
 import com.dacs.backend.model.repository.ServicioRepository;
+import com.dacs.backend.service.helper.CirugiaSecurityHelper;
+import com.dacs.backend.service.helper.ProcedimientoSpecificationBuilder;
+import com.dacs.backend.service.helper.ProcedimientoSortBuilder;
 
-import jakarta.persistence.criteria.JoinType;
-import jakarta.persistence.criteria.Subquery;
+import lombok.RequiredArgsConstructor;
 
+/**
+ * Servicio de Cirugías aplicando principios SOLID.
+ */
 @Service
+@RequiredArgsConstructor
 public class CirugiaServiceImpl implements CirugiaService {
 
-    @Autowired
-    CirugiaRepository cirugiaRepository;
-    @Autowired
-    private CirugiaMapper cirugiaMapper;
-
-    @Autowired
-    private PacienteRepository pacienteRepository;
-
-    @Autowired
-    private ServicioRepository servicioRepository;
-
-    @Autowired
-    private ModelMapper modelMapper;
-
-    @Autowired
-    private TurnoService turnoService;
+    private final CirugiaRepository cirugiaRepository;
+    private final CirugiaMapper cirugiaMapper;
+    private final PacienteRepository pacienteRepository;
+    private final ServicioRepository servicioRepository;
+    private final ModelMapper modelMapper;
+    private final TurnoService turnoService;
+    private final CirugiaSecurityHelper securityHelper;
+    private final ProcedimientoSpecificationBuilder specificationBuilder;
+    private final ProcedimientoSortBuilder sortBuilder;
 
     @Override
     public Optional<Cirugia> getById(Long id) {
@@ -64,23 +57,17 @@ public class CirugiaServiceImpl implements CirugiaService {
     @Override
     @Transactional
     public CirugiaDTO.Response createCirugia(CirugiaDTO.Create request) {
-        // mapear request -> entidad (resuelve relaciones dentro del mapper)
         Long servicioId = request.getServicioId();
         Long quirofanoId = request.getQuirofanoId();
         LocalDateTime fechaHoraInicio = request.getFechaHoraInicio();
-        LocalDateTime fechaHoraFin = fechaHoraInicio.plusMinutes(servicioRepository.findById(servicioId).get().getDuracionMinutos()); // suposición
-        
-      //  System.out.println("FechaHoraInicio: " + fechaHoraFin);
-        System.out.println("FechaHoraFin: " + fechaHoraFin);
-        System.out.println("QuirofanoId: " + quirofanoId);
-        System.out.println("fechaHoraInicioss: " + fechaHoraInicio);
+        LocalDateTime fechaHoraFin = fechaHoraInicio.plusMinutes(
+                servicioRepository.findById(servicioId).orElseThrow().getDuracionMinutos());
 
         Cirugia entity = cirugiaMapper.toEntity(request);
         Cirugia saved = cirugiaRepository.save(entity);
 
         turnoService.reservarTurnosParaCirugia(saved.getId(), quirofanoId, fechaHoraInicio, fechaHoraFin);
-        
-        // mapear entidad -> response DTO
+
         return cirugiaMapper.toResponseDto(saved);
     }
 
@@ -100,11 +87,6 @@ public class CirugiaServiceImpl implements CirugiaService {
         Cirugia cirugia = cirugiaRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Cirugía no encontrada id=" + id));
         cancelarCirugiaYLiberarTurnos(cirugia);
-    }
-
-    @Override
-    public Cirugia getBy(Map<String, Object> filter) {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -132,8 +114,7 @@ public class CirugiaServiceImpl implements CirugiaService {
     public CirugiaDTO.Response finalizarCirugia(long cirugiaId) {
         Cirugia cirugia = cirugiaRepository.findById(cirugiaId)
                 .orElseThrow(() -> new IllegalArgumentException("Cirugia no encontrada id=" + cirugiaId));
-        //cirugia.setFechaHoraFin(LocalDateTime.now());   AGREGAR CAMPO EN ENTITY SI ES NECESARIO
-        cirugia.setEstado(EstadoCirugia.FINALIZADA);
+        cirugia.setEstado(cirugia.getEstado().finalizar());
         Cirugia updated = cirugiaRepository.save(cirugia);
         return cirugiaMapper.toResponseDto(updated);
     }
@@ -144,167 +125,47 @@ public class CirugiaServiceImpl implements CirugiaService {
         Cirugia cirugia = cirugiaRepository.findById(cirugiaId)
                 .orElseThrow(() -> new IllegalArgumentException("Cirugia no encontrada id=" + cirugiaId));
 
-        if (cirugia.getEstado() == EstadoCirugia.FINALIZADA) {
-            throw new IllegalArgumentException("No se puede inicializar una cirugía finalizada");
-        }
-        if (cirugia.getEstado() == EstadoCirugia.CANCELADA) {
-            throw new IllegalArgumentException("No se puede inicializar una cirugía cancelada");
-        }
-
-        cirugia.setEstado(EstadoCirugia.EN_CURSO);
+        cirugia.setEstado(cirugia.getEstado().inicializar());
         Cirugia updated = cirugiaRepository.save(cirugia);
         return cirugiaMapper.toResponseDto(updated);
     }
 
     @Transactional
     protected void cancelarCirugiaYLiberarTurnos(Cirugia cirugia) {
-        cirugia.setEstado(EstadoCirugia.CANCELADA);
+        cirugia.setEstado(cirugia.getEstado().cancelar());
         Cirugia saved = cirugiaRepository.save(cirugia);
         turnoService.borrarTurno(saved.getId());
     }
 
-
     @Override
     public PaginacionDto.Response<CirugiaDTO.Response> getCirugias(int pagina, int tamaño, LocalDate fechaInicio,
             LocalDate fechaFin, EstadoCirugia estado, String search, String sort, String order) {
-        Sort sortSpec = buildSort(sort, order);
+        var sortSpec = sortBuilder.build(sort, order, "prioridad");
         Pageable pageable = PageRequest.of(pagina, tamaño, sortSpec);
 
-        Specification<Cirugia> specification = buildSpecification(fechaInicio, fechaFin, estado, search);
-        if (shouldFilterToAssignedSurgeries()) {
-            specification = specification.and(assignedToCurrentMedicalStaff());
+        Specification<Cirugia> specification = specificationBuilder.build(fechaInicio, fechaFin, estado, search,
+                "prioridad");
+        if (securityHelper.shouldFilterToAssignedSurgeries()) {
+            String username = securityHelper.getCurrentUsername();
+            specification = specification.and(specificationBuilder.assignedToMedicalStaff(username));
         }
 
-        Page<Cirugia> p = cirugiaRepository.findAll(specification, pageable);
-
-        List<Cirugia> entidades = p.getContent();
+        Page<Cirugia> page = cirugiaRepository.findAll(specification, pageable);
+        List<Cirugia> entidades = page.getContent();
         List<CirugiaDTO.Response> dtos = entidades.stream()
                 .map(e -> modelMapper.map(e, CirugiaDTO.Response.class))
                 .collect(Collectors.toList());
 
         mapearPacientes(entidades, dtos);
         mapearServicios(entidades, dtos);
-        PaginacionDto.Response<CirugiaDTO.Response> resp = new PaginacionDto.Response<CirugiaDTO.Response>();
+
+        PaginacionDto.Response<CirugiaDTO.Response> resp = new PaginacionDto.Response<>();
         resp.setContenido(dtos);
-        resp.setPagina(p.getNumber());
-        resp.setTamaño(p.getSize());
-        resp.setTotalElementos(p.getTotalElements());
-        resp.setTotalPaginas(p.getTotalPages());
+        resp.setPagina(page.getNumber());
+        resp.setTamaño(page.getSize());
+        resp.setTotalElementos(page.getTotalElements());
+        resp.setTotalPaginas(page.getTotalPages());
         return resp;
-    }
-
-    private Specification<Cirugia> buildSpecification(LocalDate fechaInicio, LocalDate fechaFin, EstadoCirugia estado,
-            String search) {
-        return (root, query, cb) -> {
-            query.distinct(true);
-
-            List<jakarta.persistence.criteria.Predicate> predicates = new java.util.ArrayList<>();
-
-            if (fechaInicio != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("fechaHoraInicio"), fechaInicio.atStartOfDay()));
-            }
-            if (fechaFin != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("fechaHoraInicio"), fechaFin.atTime(23, 59, 59)));
-            }
-            if (estado != null) {
-                predicates.add(cb.equal(root.get("estado"), estado));
-            }
-
-            if (search != null && !search.isBlank()) {
-                String likePattern = "%" + search.trim().toLowerCase() + "%";
-
-                var pacienteJoin = root.join("paciente", JoinType.LEFT);
-                var servicioJoin = root.join("servicio", JoinType.LEFT);
-                var quirofanoJoin = root.join("quirofano", JoinType.LEFT);
-
-                jakarta.persistence.criteria.Predicate searchPredicate = cb.or(
-                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("nombre"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("apellido"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(pacienteJoin.get("dni"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(servicioJoin.get("nombre"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("estado").as(String.class), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("tipo"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(root.get("prioridad"), "")), likePattern),
-                        cb.like(cb.lower(cb.coalesce(quirofanoJoin.get("nombre"), "")), likePattern));
-                predicates.add(searchPredicate);
-            }
-
-            return cb.and(predicates.toArray(new jakarta.persistence.criteria.Predicate[0]));
-        };
-    }
-
-    private Specification<Cirugia> assignedToCurrentMedicalStaff() {
-        String username = currentUsername();
-        if (username == null || username.isBlank()) {
-            return (root, query, cb) -> cb.conjunction();
-        }
-
-        String normalizedUsername = username.toLowerCase();
-        return (root, query, cb) -> {
-            Subquery<Long> subquery = query.subquery(Long.class);
-            var equipoRoot = subquery.from(EquipoMedico.class);
-            var personalJoin = equipoRoot.join("personal");
-
-            subquery.select(cb.literal(1L));
-            subquery.where(
-                    cb.equal(equipoRoot.get("cirugia"), root),
-                    cb.equal(cb.lower(personalJoin.get("legajo")), normalizedUsername));
-
-            return cb.exists(subquery);
-        };
-    }
-
-    private boolean shouldFilterToAssignedSurgeries() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return false;
-        }
-
-        boolean isAdmin = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch("ROLE_admin"::equals);
-        if (isAdmin) {
-            return false;
-        }
-
-        return authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch("ROLE_personal_medico"::equals);
-    }
-
-    private String currentUsername() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            return null;
-        }
-
-        String username = authentication.getName();
-        if (username != null && !username.isBlank()) {
-            return username;
-        }
-
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
-            return jwt.getClaimAsString("preferred_username");
-        }
-
-        return null;
-    }
-
-    private Sort buildSort(String sort, String order) {
-        Sort.Direction direction = "desc".equalsIgnoreCase(order) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        String normalizedSort = sort == null ? "fechaHoraInicio" : sort.trim();
-
-        return switch (normalizedSort) {
-            case "paciente" -> Sort.by(direction, "paciente.apellido").and(Sort.by(direction, "paciente.nombre"));
-            case "servicio" -> Sort.by(direction, "servicio.nombre");
-            case "estado" -> Sort.by(direction, "estado");
-            case "tipo" -> Sort.by(direction, "tipo");
-            case "prioridad" -> Sort.by(direction, "prioridad");
-            case "quirofano" -> Sort.by(direction, "quirofano.nombre");
-            case "fechaHoraInicio", "fecha", "hora" -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));
-            default -> Sort.by(direction, "fechaHoraInicio").and(Sort.by(direction, "id"));
-        };
     }
 
     private void mapearPacientes(List<Cirugia> entidades, List<CirugiaDTO.Response> dtos) {
@@ -364,30 +225,31 @@ public class CirugiaServiceImpl implements CirugiaService {
     }
 
     @Override
-    public List<ServicioDto> getServicios( int pagina, int tamaño) {
+    public List<ServicioDto> getServicios(int pagina, int tamaño) {
         Pageable pageable = PageRequest.of(pagina, tamaño);
         return servicioRepository.findAll(pageable)
-            .stream()
-            .map(s -> modelMapper.map(s, ServicioDto.class))
-            .collect(Collectors.toList());
+                .stream()
+                .map(s -> modelMapper.map(s, ServicioDto.class))
+                .collect(Collectors.toList());
     }
 
     @Override
-    public Long countCirugiasRestantesHoy(){
+    public Long countCirugiasRestantesHoy() {
         LocalDateTime startOfDay = LocalDate.now().atStartOfDay();
         LocalDateTime endOfDay = LocalDate.now().atTime(23, 59, 59);
         return cirugiaRepository.countByEstadoAndFechaHoraInicioBetween(EstadoCirugia.PROGRAMADA, startOfDay, endOfDay);
     }
 
     @Override
-    public Long countCirugiasEstaSemana(){
+    public Long countCirugiasEstaSemana() {
         LocalDate today = LocalDate.now();
-        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1); // Lunes
-        LocalDate endOfWeek = startOfWeek.plusDays(6); // Domingo
+        LocalDate startOfWeek = today.minusDays(today.getDayOfWeek().getValue() - 1);
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
 
         LocalDateTime startOfWeekDateTime = startOfWeek.atStartOfDay();
         LocalDateTime endOfWeekDateTime = endOfWeek.atTime(23, 59, 59);
 
-        return cirugiaRepository.countByEstadoAndFechaHoraInicioBetween(EstadoCirugia.PROGRAMADA, startOfWeekDateTime, endOfWeekDateTime);
+        return cirugiaRepository.countByEstadoAndFechaHoraInicioBetween(EstadoCirugia.PROGRAMADA, startOfWeekDateTime,
+                endOfWeekDateTime);
     }
 }

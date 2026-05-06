@@ -12,6 +12,9 @@ public class DashboardServiceImpl  implements DashboardService {
     private CirugiaService cirugiaService;
 
     @Autowired
+    private UrgenciaService urgenciaService;
+
+    @Autowired
     private PacienteService pacienteService;
 
     @Autowired
@@ -25,6 +28,8 @@ public class DashboardServiceImpl  implements DashboardService {
         stats.setTotalPacientes(pacienteService.countPacientes());
         stats.setCirugiasHoy(cirugiaService.countCirugiasRestantesHoy());
         stats.setCirugiasEstaSemana(cirugiaService.countCirugiasEstaSemana());
+        stats.setUrgenciasHoy(urgenciaService.countUrgenciasHoy());
+        stats.setUrgenciasEstaSemana(urgenciaService.countUrgenciasEstaSemana());
         stats.setQuirofanosDisponibles(quirofanoService.quirofanosDisponibles());
         stats.setQuirofanosEnUso(quirofanoService.quirofanosEnUso());
         return stats;
