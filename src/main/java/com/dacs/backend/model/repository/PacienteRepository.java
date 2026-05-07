@@ -16,7 +16,9 @@ public interface PacienteRepository extends JpaRepository<Paciente, Long> {
     
     List<Paciente> findByDni(String dni);
     
-    @Query("SELECT p FROM Paciente p WHERE " +
-           "LOWER(p.nombre) LIKE LOWER(CONCAT('%', :search, '%'))")
-    Page<Paciente> findBySearch(@Param("search") String search, Pageable pageable);
+            @Query("SELECT p FROM Paciente p WHERE " +
+                "LOWER(p.nombre) LIKE LOWER(CONCAT('%', :search, '%'))")
+            Page<Paciente> findBySearch(@Param("search") String search, Pageable pageable);
+
+            Page<Paciente> findAll(Pageable pageable);
 }

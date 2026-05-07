@@ -20,6 +20,8 @@ public class Paciente {
     @Column(length = 50, nullable = false)
     private String nombre;
 
+    @Column(nullable = false)
+    private Boolean active = true;
     @Column(length = 50, nullable = false)
     private String apellido;
     

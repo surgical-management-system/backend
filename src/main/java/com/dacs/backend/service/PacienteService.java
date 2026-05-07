@@ -22,4 +22,8 @@ public interface PacienteService extends CommonService<Paciente>{
     Response updatePaciente(Update pacienteDTO);
 
     long countPacientes();
+
+    void activate(Long id);
+
+    void deactivate(Long id);
 }

@@ -33,6 +33,7 @@ public class PacienteDTO {
         private String peso;
         private String direccion;
         private String telefono;
+        private Boolean active;
     }
 
     @Getter

@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import com.dacs.backend.dto.PacienteDTO;
 import com.dacs.backend.dto.PaginacionDto;
@@ -18,6 +19,7 @@ import com.dacs.backend.model.repository.PacienteRepository;
 
 import io.micrometer.common.lang.NonNull;
 
+@Slf4j
 @Service
 public class PacienteServiceImpl implements PacienteService {
 
@@ -50,7 +52,15 @@ public class PacienteServiceImpl implements PacienteService {
     @Override
     public void delete(Long id) {
         Optional<Paciente> paciente = getById(id);
-        pacienteRepository.delete(paciente.get());
+        if (paciente.isEmpty()) {
+            log.warn("Attempted to deactivate non-existing paciente id={}", id);
+            return;
+        }
+        Paciente p = paciente.get();
+        log.debug("Deactivating paciente id={} current active={}", id, p.getActive());
+        p.setActive(false);
+        Paciente saved = pacienteRepository.save(p);
+        log.debug("Paciente id={} deactivated, now active={}", id, saved.getActive());
     }
 
     @Override
@@ -126,5 +136,24 @@ public class PacienteServiceImpl implements PacienteService {
     @Override
     public long countPacientes() {
         return pacienteRepository.count();
+    }
+
+    @Override
+    public void activate(Long id) {
+        Optional<Paciente> paciente = getById(id);
+        if (paciente.isEmpty()) {
+            log.warn("Attempted to activate non-existing paciente id={}", id);
+            return;
+        }
+        Paciente p = paciente.get();
+        log.debug("Activating paciente id={} current active={}", id, p.getActive());
+        p.setActive(true);
+        Paciente saved = pacienteRepository.save(p);
+        log.debug("Paciente id={} activated, now active={}", id, saved.getActive());
+    }
+
+    @Override
+    public void deactivate(Long id) {
+        delete(id);
     }
 }
