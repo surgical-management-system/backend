@@ -1,4 +1,7 @@
-name: Build and deploy JAR app to Azure Web App - backendd
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy JAR app to Azure Web App - back
 
 on:
   push:
@@ -22,7 +25,7 @@ jobs:
           distribution: 'microsoft'
 
       - name: Build with Maven
-        run: mvn clean install -DskipTests
+        run: mvn clean install
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -46,15 +49,15 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_C92F20511A794B3AAEC0873304E9FCE2 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_3918A1831E2B4121956E331C0688C22F }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E913B21A473E4EDFAFA85BF868D6C9D3 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8476D7B5DAAA4EA49E0C02EADD129B12 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_B0D1254BF8A543B6B360D454ACCD3801 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_4F3C963E71CE4FC0B5B980068E7D4041 }}
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'backendd'
+          app-name: 'back'
           slot-name: 'Production'
           package: '*.jar'
           
