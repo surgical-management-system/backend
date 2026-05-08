@@ -10,7 +10,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Component
 public class ProcedimientoSpecificationBuilder {
@@ -46,23 +49,53 @@ public class ProcedimientoSpecificationBuilder {
     }
 
     public Specification<com.dacs.backend.model.entity.Cirugia> assignedToMedicalStaff(String username) {
-        if (username == null || username.isBlank()) {
-            return (root, query, cb) -> cb.conjunction();
+        return assignedToMedicalStaffByField(username, "cirugia");
+    }
+
+    public Specification<com.dacs.backend.model.entity.Urgencia> assignedToMedicalStaffUrgencia(String username) {
+        return assignedToMedicalStaffByField(username, "urgencia");
+    }
+
+    private <T> Specification<T> assignedToMedicalStaffByField(String username, String relationField) {
+        Set<String> candidates = buildUsernameCandidates(username);
+        if (candidates.isEmpty()) {
+            // Missing user identity should never return all surgeries for medical users.
+            return (root, query, cb) -> cb.disjunction();
         }
 
-        String normalizedUsername = username.toLowerCase();
         return (root, query, cb) -> {
             Subquery<Long> subquery = query.subquery(Long.class);
             var equipoRoot = subquery.from(EquipoMedico.class);
             var personalJoin = equipoRoot.join("personal");
 
             subquery.select(cb.literal(1L));
+            Predicate[] candidatePredicates = candidates.stream()
+                    .map(candidate -> cb.equal(cb.lower(personalJoin.get("legajo")), candidate))
+                    .toArray(Predicate[]::new);
+
             subquery.where(
-                    cb.equal(equipoRoot.get("cirugia"), root),
-                    cb.equal(cb.lower(personalJoin.get("legajo")), normalizedUsername));
+                    cb.equal(equipoRoot.get(relationField), root),
+                    cb.or(candidatePredicates));
 
             return cb.exists(subquery);
         };
+    }
+
+    private Set<String> buildUsernameCandidates(String username) {
+        Set<String> candidates = new LinkedHashSet<>();
+        if (username == null || username.isBlank()) {
+            return candidates;
+        }
+
+        String normalized = username.trim().toLowerCase(Locale.ROOT);
+        candidates.add(normalized);
+
+        int atIndex = normalized.indexOf('@');
+        if (atIndex > 0) {
+            candidates.add(normalized.substring(0, atIndex));
+        }
+
+        return candidates;
     }
 
     private <T> Predicate buildSearchPredicate(Root<T> root, CriteriaBuilder cb, String search, String priorityField) {
@@ -77,11 +110,30 @@ public class ProcedimientoSpecificationBuilder {
         predicates.add(cb.like(cb.lower(cb.coalesce(pacienteJoin.get("apellido"), "")), likePattern));
         predicates.add(cb.like(cb.lower(cb.coalesce(pacienteJoin.get("dni"), "")), likePattern));
         predicates.add(cb.like(cb.lower(cb.coalesce(servicioJoin.get("nombre"), "")), likePattern));
-        predicates.add(cb.like(cb.lower(cb.coalesce(root.get("estado").as(String.class), "")), likePattern));
+        predicates.add(cb.like(cb.lower(root.get("estado").as(String.class)), likePattern));
         predicates.add(cb.like(cb.lower(cb.coalesce(root.get("tipo"), "")), likePattern));
-        predicates.add(cb.like(cb.lower(cb.coalesce(root.get(priorityField).as(String.class), "")), likePattern));
+        Class<?> priorityJavaType = root.get(priorityField).getJavaType();
+        if (Number.class.isAssignableFrom(priorityJavaType)
+                || priorityJavaType == int.class
+                || priorityJavaType == long.class
+                || priorityJavaType == short.class) {
+            Integer numericSearch = tryParseInteger(search);
+            if (numericSearch != null) {
+                predicates.add(cb.equal(root.get(priorityField), numericSearch));
+            }
+        } else {
+            predicates.add(cb.like(cb.lower(root.get(priorityField).as(String.class)), likePattern));
+        }
         predicates.add(cb.like(cb.lower(cb.coalesce(quirofanoJoin.get("nombre"), "")), likePattern));
 
         return cb.or(predicates.toArray(new Predicate[0]));
+    }
+
+    private Integer tryParseInteger(String value) {
+        try {
+            return Integer.valueOf(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

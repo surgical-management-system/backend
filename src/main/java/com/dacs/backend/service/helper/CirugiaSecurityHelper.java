@@ -6,6 +6,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -26,13 +27,14 @@ public class CirugiaSecurityHelper {
 
         Set<String> roles = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
+                .map(role -> role == null ? "" : role.toLowerCase(Locale.ROOT))
                 .collect(Collectors.toSet());
 
-        if (roles.contains("ROLE_admin")) {
+        if (roles.contains("role_admin")) {
             return false;
         }
 
-        return roles.contains("ROLE_personal_medico");
+        return roles.contains("role_personal_medico");
     }
 
     /**
@@ -47,14 +49,22 @@ public class CirugiaSecurityHelper {
             return null;
         }
 
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof Jwt jwt) {
+            String legajo = jwt.getClaimAsString("legajo");
+            if (legajo != null && !legajo.isBlank()) {
+                return legajo;
+            }
+
+            String preferredUsername = jwt.getClaimAsString("preferred_username");
+            if (preferredUsername != null && !preferredUsername.isBlank()) {
+                return preferredUsername;
+            }
+        }
+
         String username = authentication.getName();
         if (username != null && !username.isBlank()) {
             return username;
-        }
-
-        Object principal = authentication.getPrincipal();
-        if (principal instanceof Jwt jwt) {
-            return jwt.getClaimAsString("preferred_username");
         }
 
         return null;

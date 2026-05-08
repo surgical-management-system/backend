@@ -9,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import com.dacs.backend.mapper.UrgenciaMapper;
 import com.dacs.backend.model.entity.EstadoUrgencia;
 import com.dacs.backend.model.entity.Urgencia;
 import com.dacs.backend.model.repository.UrgenciaRepository;
+import com.dacs.backend.service.helper.CirugiaSecurityHelper;
 import com.dacs.backend.service.helper.ProcedimientoSpecificationBuilder;
 import com.dacs.backend.service.helper.ProcedimientoSortBuilder;
 
@@ -30,6 +32,7 @@ public class UrgenciaServiceImpl implements UrgenciaService {
     private final UrgenciaRepository urgenciaRepository;
     private final UrgenciaMapper urgenciaMapper;
     private final TurnoService turnoService;
+    private final CirugiaSecurityHelper securityHelper;
     private final ProcedimientoSpecificationBuilder specificationBuilder;
     private final ProcedimientoSortBuilder sortBuilder;
 
@@ -117,8 +120,15 @@ public class UrgenciaServiceImpl implements UrgenciaService {
             LocalDate fechaFin, EstadoUrgencia estado, String search, String sort, String order) {
         var sortSpec = sortBuilder.build(sort, order, "nivelUrgencia");
         Pageable pageable = PageRequest.of(pagina, tamano, sortSpec);
-        Page<Urgencia> page = urgenciaRepository.findAll(
-                specificationBuilder.build(fechaInicio, fechaFin, estado, search, "nivelUrgencia"), pageable);
+
+        Specification<Urgencia> specification = specificationBuilder.build(fechaInicio, fechaFin, estado, search,
+            "nivelUrgencia");
+        if (securityHelper.shouldFilterToAssignedSurgeries()) {
+            String username = securityHelper.getCurrentUsername();
+            specification = specification.and(specificationBuilder.assignedToMedicalStaffUrgencia(username));
+        }
+
+        Page<Urgencia> page = urgenciaRepository.findAll(specification, pageable);
 
         List<Urgencia> entidades = page.getContent();
         List<UrgenciaDTO.Response> dtos = entidades.stream()
