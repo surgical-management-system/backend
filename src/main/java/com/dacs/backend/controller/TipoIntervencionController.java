@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 
 @RestController
-@RequestMapping("/api/tipos-intervenciones")
+@RequestMapping("/tipos-intervenciones")
 public class TipoIntervencionController {
 
     @Autowired

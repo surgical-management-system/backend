@@ -22,7 +22,7 @@ import ch.qos.logback.core.model.Model;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
-@RequestMapping(value = "/api/dashboard")
+@RequestMapping(value = "/dashboard")
 public class DashboardController {
 
     @Autowired
