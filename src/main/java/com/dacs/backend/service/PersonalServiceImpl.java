@@ -71,23 +71,31 @@ public class PersonalServiceImpl implements PersonalService {
    public PaginacionDto<PersonalDto.Response> getAll(int page, int size, String search, String role) {
        Pageable pageable = PageRequest.of(page, size);
        Page<Personal> personalPage;
-       
-       if (search != null && !search.trim().isEmpty()) {
-           personalPage = personalRepository.findByNombreContainingIgnoreCase(search, pageable);
+
+       String normalizedSearch = search == null ? null : search.trim();
+       if (normalizedSearch != null && normalizedSearch.isEmpty()) {
+           normalizedSearch = null;
+       }
+
+       String normalizedRole = role == null ? null : role.replace('_', ' ').trim().toLowerCase();
+       if (normalizedRole != null && normalizedRole.isEmpty()) {
+           normalizedRole = null;
+       }
+
+       if (normalizedSearch != null && normalizedRole != null) {
+           personalPage = personalRepository.findByNombreOrLegajoContainingIgnoreCaseAndNormalizedRol(
+                   normalizedSearch,
+                   normalizedRole,
+                   pageable);
+       } else if (normalizedSearch != null) {
+           personalPage = personalRepository.findByNombreOrLegajoContainingIgnoreCase(normalizedSearch, pageable);
+       } else if (normalizedRole != null) {
+           personalPage = personalRepository.findByNormalizedRol(normalizedRole, pageable);
        } else {
            personalPage = personalRepository.findAll(pageable);
        }
-       
-       // Filter by role if specified
-       String normalizedRole = role == null ? null : role.replace('_', ' ').trim().toLowerCase();
+
        List<PersonalDto.Response> content = personalPage.getContent().stream()
-               .filter(personal -> {
-                   if (normalizedRole == null || normalizedRole.isEmpty()) {
-                       return true;
-                   }
-                   String personalRole = personal.getRol() == null ? "" : personal.getRol().replace('_', ' ').trim().toLowerCase();
-                   return normalizedRole.equals(personalRole);
-               })
                .map(personal -> modelMapper.map(personal, PersonalDto.Response.class))
                .toList();
        
