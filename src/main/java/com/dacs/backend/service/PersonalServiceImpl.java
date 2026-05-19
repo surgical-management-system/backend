@@ -117,6 +117,13 @@ public class PersonalServiceImpl implements PersonalService {
        return personalRepository.existsByLegajoIgnoreCase(legajo.trim());
    }
 
+    @Override
+    public PersonalDto.Response getById(Long id) {
+        Personal existingPersonal = personalRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Personal no encontrado con id: " + id));
+        return modelMapper.map(existingPersonal, PersonalDto.Response.class);
+    }
+
    private void validateDuplicatesOnCreate(PersonalDto.Create request) {
        if (request == null) {
            throw new IllegalArgumentException("El request de personal no puede ser null");

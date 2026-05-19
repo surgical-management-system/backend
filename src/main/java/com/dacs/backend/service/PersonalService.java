@@ -16,5 +16,7 @@ public interface PersonalService {
 
     boolean existsByLegajo(String legajo);
 
+    PersonalDto.Response getById(Long id);
+
 
 }

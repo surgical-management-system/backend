@@ -58,4 +58,10 @@ public class PersonalController {
         personalService.delete(id);
         return ResponseEntity.status(HttpStatus.OK).build();
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PersonalDto.Response> getById(@PathVariable Long id) {
+        PersonalDto.Response out = personalService.getById(id);
+        return ResponseEntity.status(HttpStatus.OK).body(out);
+    }
 }

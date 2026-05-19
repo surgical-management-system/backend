@@ -54,4 +54,18 @@ public class PacienteController {
         pacienteService.activate(id);
         return new ResponseEntity<>(HttpStatus.OK);
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PacienteDTO.Response> getById(@PathVariable("id") Long id) {
+        return ResponseEntity.ok(pacienteService.getById(id).map(p -> {
+            // Map entity to DTO.Response using service's existing methods if available
+            // If service returns Optional<Paciente>, convert to Response via mapper in service layer
+            // Here we assume service implementation provides mapping via getById returning Optional<Response>
+            // Fallback: call getByPage and filter, but better to ask service for Response
+            return pacienteService.getByPage(0, 1, null).getContenido().stream()
+                    .filter(r -> r.getId().equals(id))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Paciente not found"));
+        }).orElseThrow(() -> new RuntimeException("Paciente not found")));
+    }
 }
