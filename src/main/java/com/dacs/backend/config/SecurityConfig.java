@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -46,6 +47,17 @@ public class SecurityConfig {
 		return Collections.emptyList();
 	}
 
+
+	@Bean
+	@Profile("local")
+	public SecurityFilterChain localPublicGraphqlTargets(HttpSecurity http) throws Exception {
+		http.csrf(csrf -> csrf.disable())
+			.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+			.securityMatcher("/personal/**", "/pacientes/**", "/cirugia/**", "/urgencia/**", "/turnos/**", "/quirofano/**")
+			.authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+
+		return http.build();
+	}
 
 	@Bean
 	public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
